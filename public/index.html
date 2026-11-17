@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NSE Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{
+  --bg:#0c1016; --panel:#10151d; --raise:#161d27; --line:#1f2834; --grid:#161d26;
+  --text:#d5dce5; --muted:#6f7b8c; --up:#2fbf8b; --down:#f2566a; --accent:#e0a53a; --blue:#5fa8ff;
+  --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 var(--sans);overflow:hidden}
+button,input{font:inherit;color:inherit}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)} .muted{color:var(--muted)}
+.hidden{display:none!important}
+.grow{flex:1}
+
+.app{display:grid;grid-template-rows:44px 1fr 24px;height:100%}
+.top{display:flex;align-items:center;gap:18px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--panel);min-width:0}
+.sym{display:flex;align-items:baseline;gap:10px;min-width:0}
+.sym b{font-size:15px;font-weight:600;letter-spacing:.02em}
+.sym span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.px{display:flex;align-items:baseline;gap:10px}
+.px #last{font-size:16px;font-weight:500}
+.px #chg{font-size:12px}
+.flash-up{animation:fu .9s ease-out} .flash-down{animation:fd .9s ease-out}
+@keyframes fu{from{background:rgba(47,191,139,.28)}to{background:transparent}}
+@keyframes fd{from{background:rgba(242,86,106,.28)}to{background:transparent}}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.legend b{font-weight:400;color:var(--text)}
+.status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.status.ok .dot{background:var(--up);box-shadow:0 0 0 3px rgba(47,191,139,.18)}
+.status.bad .dot{background:var(--down)}
+
+.body{display:grid;grid-template-columns:44px 1fr 268px;min-height:0}
+.tools{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;border-right:1px solid var(--line);background:var(--panel)}
+.tool{width:34px;height:32px;display:grid;place-items:center;border:0;border-radius:4px;background:transparent;color:var(--muted);cursor:pointer}
+.tool:hover{color:var(--text);background:var(--raise)}
+.tool[aria-pressed="true"]{color:var(--accent);background:var(--raise)}
+.tool svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.tools .sep{width:24px;height:1px;background:var(--line);margin:6px 0}
+
+.center{display:grid;grid-template-rows:38px 1fr;min-width:0;min-height:0}
+.bar{display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--bg);min-width:0;overflow-x:auto}
+.seg{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;flex:none}
+.seg button{border:0;background:transparent;color:var(--muted);padding:4px 9px;cursor:pointer;font-family:var(--mono);font-size:12px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--raise);color:var(--text)}
+.btn{border:1px solid var(--line);background:transparent;color:var(--muted);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;flex:none}
+.btn:hover{color:var(--text)}
+.btn[aria-pressed="true"]{color:var(--text);background:var(--raise);border-color:#2a3442}
+.pop-wrap{position:relative;flex:none}
+.pop{position:absolute;top:calc(100% + 6px);left:0;z-index:20;width:230px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.pop label{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:4px;cursor:pointer;color:var(--text)}
+.pop label:hover{background:var(--raise)}
+.pop input{accent-color:var(--accent);margin:0}
+.pop .note{padding:6px 8px 4px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);margin-top:4px}
+
+.chartwrap{position:relative;min-width:0;min-height:0;overflow:hidden}
+#chart{position:absolute;inset:0}
+#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
+#overlay.active{pointer-events:auto;cursor:crosshair}
+.hint{position:absolute;left:12px;bottom:10px;z-index:6;font-size:12px;color:var(--muted);background:rgba(12,16,22,.85);padding:4px 8px;border-radius:4px;pointer-events:none}
+.hint:empty{display:none}
+
+.watch{display:grid;grid-template-rows:auto 1fr;border-left:1px solid var(--line);background:var(--panel);min-height:0}
+.wh{padding:10px;border-bottom:1px solid var(--line)}
+.wh input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 9px;outline:none}
+.wh input:focus{border-color:#34415299}
+.wcols{display:grid;grid-template-columns:1fr 84px 66px;padding:6px 12px;color:var(--muted);font-size:11px;border-bottom:1px solid var(--line)}
+.wcols span:not(:first-child){text-align:right}
+#list{overflow:auto;min-height:0}
+.row{display:grid;grid-template-columns:1fr 84px 66px;width:100%;padding:7px 12px;border:0;border-bottom:1px solid #151c25;background:transparent;text-align:left;cursor:pointer;align-items:center}
+.row:hover{background:var(--raise)}
+.row[aria-current="true"]{background:#1a2330;box-shadow:inset 2px 0 0 var(--accent)}
+.row .tk{font-family:var(--mono);font-weight:500}
+.row .nm{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.row .pr,.row .cg{text-align:right;font-family:var(--mono);font-size:12px}
+.empty{padding:14px 12px;color:var(--muted)}
+
+.foot{display:flex;align-items:center;gap:14px;padding:0 12px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden}
+
+@media (max-width:900px){
+  .body{grid-template-columns:44px 1fr}
+  .watch{display:none}
+  .legend{display:none}
+  .sym span{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="sym"><b id="sym">SCOM</b><span id="symName"></span></div>
+    <div class="px"><span id="last" class="mono">--</span><span id="chg" class="mono muted">--</span></div>
+    <div class="legend mono" id="legend"></div>
+    <div class="grow"></div>
+    <div class="status" id="status"><i class="dot"></i><span>Connecting</span></div>
+  </header>
+
+  <div class="body">
+    <nav class="tools" id="tools" aria-label="Drawing tools">
+      <button class="tool" data-tool="cursor" aria-pressed="true" title="Cursor (Esc)">
+        <svg viewBox="0 0 24 24"><path d="M5 3l13 8-6 1.5L9.5 20z"/></svg></button>
+      <button class="tool" data-tool="trend" aria-pressed="false" title="Trend line">
+        <svg viewBox="0 0 24 24"><path d="M4 18L20 6"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="6" r="1.6"/></svg></button>
+      <button class="tool" data-tool="hline" aria-pressed="false" title="Horizontal line">
+        <svg viewBox="0 0 24 24"><path d="M3 12h18"/></svg></button>
+      <button class="tool" data-tool="rect" aria-pressed="false" title="Rectangle">
+        <svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="10" rx="1"/></svg></button>
+      <div class="sep"></div>
+      <button class="tool" data-tool="long" aria-pressed="false" title="Long position">
+        <svg viewBox="0 0 24 24"><path d="M4 14h16M4 8h16M4 18h16"/><path d="M12 19V5"/></svg></button>
+      <button class="tool" data-tool="short" aria-pressed="false" title="Short position">
+        <svg viewBox="0 0 24 24"><path d="M4 14h16M4 8h16M4 18h16"/><path d="M12 5v14"/></svg></button>
+      <div class="sep"></div>
+      <button class="tool" id="undoBtn" title="Remove last drawing (Backspace)">
+        <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
+    </nav>
+
+    <section class="center">
+      <div class="bar">
+        <div class="seg" id="tfs">
+          <button data-tf="1m">1m</button><button data-tf="5m">5m</button><button data-tf="15m">15m</button>
+          <button data-tf="1H">1H</button><button data-tf="1D" aria-pressed="true">1D</button>
+          <button data-tf="1W">1W</button><button data-tf="1M">1M</button>
+        </div>
+        <div class="seg" id="types">
+          <button data-type="candles" aria-pressed="true">Candles</button><button data-type="bars">Bars</button>
+          <button data-type="line">Line</button><button data-type="area">Area</button>
+        </div>
+        <div class="pop-wrap">
+          <button class="btn" id="indBtn" aria-expanded="false">Indicators</button>
+          <div class="pop hidden" id="indMenu">
+            <label><input type="checkbox" data-ind="sma20"> SMA 20</label>
+            <label><input type="checkbox" data-ind="sma50"> SMA 50</label>
+            <label><input type="checkbox" data-ind="ema20"> EMA 20</label>
+            <label><input type="checkbox" data-ind="ema50"> EMA 50</label>
+            <label><input type="checkbox" data-ind="bb"> Bollinger Bands 20, 2</label>
+            <label><input type="checkbox" data-ind="vwap"> VWAP</label>
+            <label><input type="checkbox" data-ind="vol"> Volume</label>
+            <label><input type="checkbox" data-ind="rsi"> RSI 14</label>
+            <label><input type="checkbox" data-ind="macd"> MACD 12, 26, 9</label>
+            <div class="note">Indicators are computed from the loaded bars.</div>
+          </div>
+        </div>
+        <div class="seg" id="scale">
+          <button data-scale="auto" aria-pressed="true">Auto</button>
+          <button data-scale="manual">Manual</button>
+          <button data-scale="locked">Lock</button>
+        </div>
+        <button class="btn" id="logBtn" aria-pressed="false">Log</button>
+        <button class="btn" id="resetBtn">Reset view</button>
+        <div class="grow"></div>
+        <button class="btn" id="clearBtn">Clear drawings</button>
+      </div>
+      <div class="chartwrap" id="chartwrap">
+        <div id="chart"></div>
+        <canvas id="overlay"></canvas>
+        <div class="hint" id="hint"></div>
+      </div>
+    </section>
+
+    <aside class="watch">
+      <div class="wh"><input id="filter" type="search" placeholder="Search or enter a symbol" autocomplete="off"></div>
+      <div style="display:grid;grid-template-rows:auto 1fr;min-height:0">
+        <div class="wcols"><span>Symbol</span><span>Last</span><span>Chg %</span></div>
+        <div id="list"><div class="empty">Loading symbols</div></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="foot">
+    <span id="foot">Feed: TradingView scanner (unofficial). Refreshes every 10 s. Intraday times in UTC.</span>
+    <span class="grow"></span>
+    <span class="mono" id="clock"></span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const LW = window.LightweightCharts;
+  const $ = (s) => document.querySelector(s);
+  const UP = '#2fbf8b', DOWN = '#f2566a';
+  const UPV = 'rgba(47,191,139,0.42)', DOWNV = 'rgba(242,86,106,0.42)';
+
+  const DEF = {
+    sma20: { label: 'SMA 20', color: '#f0b429' },
+    sma50: { label: 'SMA 50', color: '#c084fc' },
+    ema20: { label: 'EMA 20', color: '#38bdf8' },
+    ema50: { label: 'EMA 50', color: '#fb7185' },
+    bb:    { label: 'Bollinger Bands', color: '#7c8aa0' },
+    vwap:  { label: 'VWAP', color: '#e0a53a' },
+    vol:   { label: 'Volume' },
+    rsi:   { label: 'RSI 14', own: true },
+    macd:  { label: 'MACD', own: true },
+  };
+  const LS = {
+    ind: 'nse:indicators', type: 'nse:type', tf: 'nse:tf', scale: 'nse:scale', log: 'nse:log'
+  };
+
+  const S = {
+    ticker: 'SCOM', tf: '1D', type: 'candles', scale: 'auto', log: false,
+    ind: new Set(), tool: 'cursor', drawings: [], pending: null, hover: null,
+    bars: [], byTime: new Map(), lastTime: null, lastPrice: null,
+    main: null, serMap: {}, symbols: [], chart: null
+  };
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function fmt(v, d = 2) {
+    return v == null || !isFinite(v) ? '--' : Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function setStatus(text, ok) {
+    const el = $('#status');
+    el.className = 'status ' + (ok === true ? 'ok' : ok === false ? 'bad' : '');
+    el.lastElementChild.textContent = text;
+  }
+  function toTime(d) {
+    return d.length > 10 ? Math.floor(Date.parse(d.replace(' ', 'T') + ':00Z') / 1000) : d;
+  }
+
+  if (!LW) {
+    setStatus('Chart library failed to load. Check your connection and reload.', false);
+    return;
+  }
+
+  // ---------- indicator maths ----------
+  function sma(v, n) {
+    const out = []; let s = 0;
+    for (let i = 0; i < v.length; i++) { s += v[i]; if (i >= n) s -= v[i - n]; out.push(i >= n - 1 ? s / n : null); }
+    return out;
+  }
+  function ema(v, n) {
+    const k = 2 / (n + 1); let prev = null;
+    return v.map((x, i) => {
+      if (i < n - 1) return null;
+      if (prev === null) prev = v.slice(0, n).reduce((a, b) => a + b, 0) / n;
+      else prev = x * k + prev * (1 - k);
+      return prev;
+    });
+  }
+  function bands(v, n, k) {
+    const mid = sma(v, n), up = [], lo = [];
+    v.forEach((_, i) => {
+      if (mid[i] == null) { up.push(null); lo.push(null); return; }
+      let s = 0; for (let j = i - n + 1; j <= i; j++) s += (v[j] - mid[i]) ** 2;
+      const sd = Math.sqrt(s / n);
+      up.push(mid[i] + k * sd); lo.push(mid[i] - k * sd);
+    });
+    return { mid, up, lo };
+  }
+  function rsi(v, n) {
+    const out = new Array(v.length).fill(null);
+    if (v.length <= n) return out;
+    let g = 0, l = 0;
+    for (let i = 1; i <= n; i++) { const d = v[i] - v[i - 1]; if (d >= 0) g += d; else l -= d; }
+    let ag = g / n, al = l / n;
+    out[n] = 100 - 100 / (1 + ag / (al || 1e-9));
+    for (let i = n + 1; i < v.length; i++) {
+      const d = v[i] - v[i - 1];
+      ag = (ag * (n - 1) + (d > 0 ? d : 0)) / n;
+      al = (al * (n - 1) + (d < 0 ? -d : 0)) / n;
+      out[i] = 100 - 100 / (1 + ag / (al || 1e-9));
+    }
+    return out;
+  }
+  function macd(v) {
+    const e12 = ema(v, 12), e26 = ema(v, 26);
+    const line = v.map((_, i) => (e12[i] != null && e26[i] != null ? e12[i] - e26[i] : null));
+    const start = line.findIndex((x) => x != null);
+    const signal = new Array(v.length).fill(null);
+    if (start >= 0) ema(line.slice(start), 9).forEach((x, j) => { signal[start + j] = x; });
+    const hist = line.map((x, i) => (x != null && signal[i] != null ? x - signal[i] : null));
+    return { line, signal, hist };
+  }
+
+  // ---------- chart ----------
+  const chartEl = $('#chart');
+  const chart = LW.createChart(chartEl, {
+    autoSize: true,
+    layout: {
+      background: { type: 'solid', color: '#0c1016' },
+      textColor: '#6f7b8c',
+      fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
+      fontSize: 11,
+      panes: { separatorColor: '#1f2834', separatorHoverColor: '#2b3646', enableResize: true },
+      attributionLogo: false,
+    },
+    grid: { vertLines: { color: '#161d26' }, horzLines: { color: '#161d26' } },
+    crosshair: {
+      mode: 0,
+      vertLine: { color: '#55627a', width: 1, style: 3, labelBackgroundColor: '#2a3442' },
+      horzLine: { color: '#55627a', width: 1, style: 3, labelBackgroundColor: '#2a3442' },
+    },
+    rightPriceScale: { borderColor: '#1f2834', scaleMargins: { top: 0.08, bottom: 0.08 } },
+    timeScale: { borderColor: '#1f2834', timeVisible: true, secondsVisible: false, rightOffset: 6, barSpacing: 7 },
+    handleScale: { axisPressedMouseMove: { time: true, price: false }, axisDoubleClickReset: { time: true, price: true }, mouseWheel: true, pinch: true },
+    handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+  });
+  S.chart = chart;
+
+  function pt(b) {
+    const t = toTime(b.date);
+    if (S.type === 'line' || S.type === 'area') return { time: t, value: b.close };
+    return { time: t, open: b.open, high: b.high, low: b.low, close: b.close };
+  }
+  function volPt(b) {
+    return { time: toTime(b.date), value: b.volume, color: b.close >= b.open ? UPV : DOWNV };
+  }
+
+  function addMain() {
+    const common = { priceLineVisible: true, lastValueVisible: true };
+    if (S.type === 'line') {
+      S.main = chart.addSeries(LW.LineSeries, { ...common, color: '#5fa8ff', lineWidth: 2 }, 0);
+    } else if (S.type === 'area') {
+      S.main = chart.addSeries(LW.AreaSeries, { ...common, lineColor: '#5fa8ff', topColor: 'rgba(95,168,255,0.22)', bottomColor: 'rgba(95,168,255,0)', lineWidth: 2 }, 0);
+    } else if (S.type === 'bars') {
+      S.main = chart.addSeries(LW.BarSeries, { ...common, upColor: UP, downColor: DOWN }, 0);
+    } else {
+      S.main = chart.addSeries(LW.CandlestickSeries, {
+        ...common, upColor: UP, downColor: DOWN, borderUpColor: UP, borderDownColor: DOWN, wickUpColor: UP, wickDownColor: DOWN,
+      }, 0);
+    }
+    if (S.bars.length) S.main.setData(S.bars.map(pt));
+  }
+
+  function lineSeries(color, opts = {}, pane = 0) {
+    return chart.addSeries(LW.LineSeries, {
+      color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, ...opts,
+    }, pane);
+  }
+
+  function rebuildInd() {
+    Object.values(S.serMap).flat().forEach((s) => { try { chart.removeSeries(s); } catch (e) { /* already gone */ } });
+    S.serMap = {};
+    try { while (chart.panes().length > 1) chart.removePane(chart.panes().length - 1); } catch (e) { /* older api */ }
+
+    for (const id of S.ind) {
+      const def = DEF[id];
+      let pane = 0;
+      if (def.own) {
+        try { chart.addPane(); } catch (e) { /* ignore */ }
+        pane = chart.panes().length - 1;
+      }
+      if (id === 'vol') {
+        const s = chart.addSeries(LW.HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: 'vol', priceLineVisible: false, lastValueVisible: false }, 0);
+        chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+        S.serMap.vol = [s];
+      } else if (id === 'bb') {
+        S.serMap.bb = [lineSeries('#7c8aa0', { lineStyle: 2 }), lineSeries('#5b6678'), lineSeries('#5b6678')];
+      } else if (id === 'macd') {
+        S.serMap.macd = [
+          lineSeries('#5fa8ff', {}, pane), lineSeries('#f0b429', {}, pane),
+          chart.addSeries(LW.HistogramSeries, { priceLineVisible: false, lastValueVisible: false }, pane),
+        ];
+      } else if (id === 'rsi') {
+        const s = lineSeries('#38bdf8', { lineWidth: 1.5 }, pane);
+        [70, 30].forEach((p) => s.createPriceLine({ price: p, color: '#3a4558', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '' }));
+        S.serMap.rsi = [s];
+      } else {
+        S.serMap[id] = [lineSeries(def.color, {}, 0)];
+      }
+    }
+    try {
+      chart.panes().slice(1).forEach((p) => p.setStretchFactor(0.22));
+      if (chart.panes()[0]) chart.panes()[0].setStretchFactor(1);
+    } catch (e) { /* older api */ }
+  }
+
+  function updateInd() {
+    if (!S.bars.length) return;
+    const T = S.bars.map((b) => toTime(b.date));
+    const C = S.bars.map((b) => b.close);
+    const L = (arr) => arr.map((v, i) => (v == null ? null : { time: T[i], value: v })).filter(Boolean);
+    const m = S.serMap;
+    if (m.vol) m.vol[0].setData(S.bars.map((b) => volPt(b)));
+    if (m.sma20) m.sma20[0].setData(L(sma(C, 20)));
+    if (m.sma50) m.sma50[0].setData(L(sma(C, 50)));
+    if (m.ema20) m.ema20[0].setData(L(ema(C, 20)));
+    if (m.ema50) m.ema50[0].setData(L(ema(C, 50)));
+    if (m.bb) {
+      const b = bands(C, 20, 2);
+      m.bb[0].setData(L(b.mid)); m.bb[1].setData(L(b.up)); m.bb[2].setData(L(b.lo));
+    }
+    if (m.vwap) {
+      let pv = 0, vv = 0;
+      const vw = S.bars.map((b) => { const tp = (b.high + b.low + b.close) / 3; pv += tp * b.volume; vv += b.volume; return vv ? pv / vv : null; });
+      m.vwap[0].setData(L(vw));
+    }
+    if (m.rsi) m.rsi[0].setData(L(rsi(C, 14)));
+    if (m.macd) {
+      const r = macd(C);
+      m.macd[0].setData(L(r.line));
+      m.macd[1].setData(L(r.signal));
+      m.macd[2].setData(r.hist.map((h, i) => (h == null ? null : { time: T[i], value: h, color: h >= 0 ? 'rgba(47,191,139,0.6)' : 'rgba(242,86,106,0.6)' })).filter(Boolean));
+    }
+  }
+
+  // ---------- scale ----------
+  function applyScale() {
+    chart.priceScale('right').applyOptions({ autoScale: S.scale === 'auto', mode: S.log ? 1 : 0 });
+    chart.applyOptions({ handleScale: { axisPressedMouseMove: { time: true, price: S.scale === 'manual' } } });
+    document.querySelectorAll('#scale button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scale === S.scale)));
+    $('#logBtn').setAttribute('aria-pressed', String(S.log));
+    const hints = {
+      auto: 'Price scale fits the visible bars.',
+      manual: 'Drag the price axis to stretch it. Double-click it to reset.',
+      locked: 'Price scale is locked. New bars outside the range stay off the chart.',
+    };
+    $('#foot').textContent = 'Feed: TradingView scanner (unofficial). Refreshes every 10 s. Intraday times in UTC.';
+    S.scaleHint = hints[S.scale];
+    try { localStorage.setItem(LS.scale, S.scale); localStorage.setItem(LS.log, S.log ? '1' : '0'); } catch (e) { /* storage blocked */ }
+  }
+
+  // ---------- drawing overlay ----------
+  const ov = $('#overlay');
+  const octx = ov.getContext('2d');
+  const wrap = $('#chartwrap');
+
+  function resizeOverlay() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    ov.width = Math.round(w * dpr); ov.height = Math.round(h * dpr);
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  new ResizeObserver(resizeOverlay).observe(wrap);
+
+  // logical index: stable across live appends, works beyond the last bar
+  function toPoint(e) {
+    if (!S.main) return null;
+    const r = ov.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const l = chart.timeScale().coordinateToLogical(x);
+    const p = S.main.coordinateToPrice(y);
+    if (l == null || p == null || !isFinite(p)) return null;
+    return { l, p };
+  }
+  function xy(pt) {
+    if (!S.main) return null;
+    const x = chart.timeScale().logicalToCoordinate(pt.l);
+    const y = S.main.priceToCoordinate(pt.p);
+    return x == null || y == null ? null : [x, y];
+  }
+
+  function drawLabel(text, x, y, color, align = 'left') {
+    octx.font = '11px IBM Plex Mono, monospace';
+    octx.fillStyle = color;
+    octx.textAlign = align;
+    octx.textBaseline = 'middle';
+    octx.fillText(text, x, y);
+  }
+
+  function renderDrawing(d, preview) {
+    const W = wrap.clientWidth;
+    const c = octx;
+    c.save();
+    c.lineWidth = 1.25;
+    c.setLineDash([]);
+    if (d.type === 'hline') {
+      const q = xy(d.a);
+      if (q) {
+        c.strokeStyle = '#e0a53a';
+        c.beginPath(); c.moveTo(0, q[1]); c.lineTo(W, q[1]); c.stroke();
+        drawLabel(fmt(d.a.p), W - 6, q[1] - 8, '#e0a53a', 'right');
+      }
+    } else if (d.type === 'trend') {
+      const a = xy(d.a), b = d.b ? xy(d.b) : (preview && S.hover ? xy(S.hover) : null);
+      if (a && b) {
+        c.strokeStyle = '#5fa8ff';
+        c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+        [a, b].forEach((q) => { c.fillStyle = '#5fa8ff'; c.beginPath(); c.arc(q[0], q[1], 2.5, 0, Math.PI * 2); c.fill(); });
+      }
+    } else if (d.type === 'rect') {
+      const a = xy(d.a), bp = d.b || (preview && S.hover ? S.hover : null), b = bp ? xy(bp) : null;
+      if (a && b) {
+        c.fillStyle = 'rgba(95,168,255,0.12)'; c.strokeStyle = '#5fa8ff';
+        c.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
+        c.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
+      }
+    } else if (d.type === 'long' || d.type === 'short') {
+      const stopP = d.stop != null ? d.stop : (preview && S.hover ? S.hover.p : null);
+      const a = xy(d.a);
+      if (a) {
+        const x1 = a[0], x2 = x1 + 260;
+        if (stopP != null) {
+          const risk = Math.abs(d.a.p - stopP);
+          const tgt = d.type === 'long' ? d.a.p + 2 * risk : d.a.p - 2 * risk;
+          const yT = S.main.priceToCoordinate(tgt), yS = S.main.priceToCoordinate(stopP);
+                    c.fillStyle = 'rgba(47,191,139,0.16)';
+          c.fillRect(x1, Math.min(a[1], yT), x2 - x1, Math.abs(yT - a[1]));
+          c.fillStyle = 'rgba(242,86,106,0.16)';
+          c.fillRect(x1, Math.min(a[1], yS), x2 - x1, Math.abs(yS - a[1]));
+          c.strokeStyle = '#2fbf8b'; c.beginPath(); c.moveTo(x1, yT); c.lineTo(x2, yT); c.stroke();
+          c.strokeStyle = '#f2566a'; c.beginPath(); c.moveTo(x1, yS); c.lineTo(x2, yS); c.stroke();
+          const pct = (v) => ((v - d.a.p) / d.a.p * 100).toFixed(2);
+          drawLabel(`Target ${fmt(tgt)}  ${pct(tgt)}%`, x2 + 6, yT, '#2fbf8b');
+          drawLabel(`Stop ${fmt(stopP)}  ${pct(stopP)}%`, x2 + 6, yS, '#f2566a');
+          drawLabel(`R:R 2.00  ${d.type === 'long' ? 'Long' : 'Short'}`, x1 + 8, Math.min(yT, yS) + 12, '#d5dce5');
+        }
+        c.strokeStyle = '#d5dce5';
+        c.beginPath(); c.moveTo(x1, a[1]); c.lineTo(x2, a[1]); c.stroke();
+        drawLabel(`Entry ${fmt(d.a.p)}`, x2 + 6, a[1], '#d5dce5');
+      }
+    }
+    c.restore();
+  }
+
+  function drawOverlay() {
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    octx.clearRect(0, 0, W, H);
+    if (!S.main) return;
+    S.drawings.forEach((d) => renderDrawing(d, false));
+    if (S.pending) renderDrawing(S.pending, true);
+  }
+  (function loop() { drawOverlay(); requestAnimationFrame(loop); })();
+
+  function dkey() { return `nse:draw:${S.ticker}:${S.tf}`; }
+  function loadDrawings() {
+    try { return JSON.parse(localStorage.getItem(dkey()) || '[]'); } catch (e) { return []; }
+  }
+  function saveDrawings() {
+    try { localStorage.setItem(dkey(), JSON.stringify(S.drawings)); } catch (e) { /* storage blocked */ }
+  }
+  function addDrawing(d) { S.drawings.push(d); saveDrawings(); }
+
+  const HINTS = {
+    trend: 'Click the start, then click the end.',
+    hline: 'Click to place a horizontal line.',
+    rect: 'Click one corner, then the opposite corner.',
+    long: 'Click the entry, then click the stop. Target is set at 2R.',
+    short: 'Click the entry, then click the stop. Target is set at 2R.',
+  };
+
+  function setTool(t) {
+    S.tool = t;
+    S.pending = null; S.hover = null;
+    document.querySelectorAll('.tool[data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
+    ov.classList.toggle('active', t !== 'cursor');
+    $('#hint').textContent = HINTS[t] || '';
+  }
+
+  ov.addEventListener('pointerdown', (e) => {
+    if (S.tool === 'cursor') return;
+    const p = toPoint(e);
+    if (!p) return;
+    if (S.tool === 'hline') { addDrawing({ type: 'hline', a: p }); return; }
+    if (!S.pending) { S.pending = { type: S.tool, a: p }; return; }
+    const d = S.pending;
+    if (d.type === 'long' || d.type === 'short') {
+      if (p.p === d.a.p) return;
+      d.stop = p.p;
+    } else {
+      d.b = p;
+    }
+    S.pending = null;
+    addDrawing(d);
+  });
+  ov.addEventListener('pointermove', (e) => {
+    if (!S.pending) return;
+    const p = toPoint(e);
+    if (p) S.hover = p;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea')) return;
+    if (e.key === 'Escape') { setTool('cursor'); }
+    if (e.key === 'Backspace' && S.drawings.length) { S.drawings.pop(); saveDrawings(); }
+  });
+
+  document.querySelectorAll('.tool[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
+  $('#undoBtn').addEventListener('click', () => { S.drawings.pop(); saveDrawings(); });
+  $('#clearBtn').addEventListener('click', () => {
+    if (S.drawings.length && confirm('Clear all drawings on this chart?')) { S.drawings = []; saveDrawings(); }
+  });
+
+  // ---------- legend ----------
+  function renderLegend(b) {
+    const el = $('#legend');
+    if (!b) { el.innerHTML = ''; return; }
+    const i = S.bars.indexOf(b);
+    const prev = i > 0 ? S.bars[i - 1] : null;
+    const chg = prev ? (b.close - prev.close) : 0;
+    const cls = chg >= 0 ? 'up' : 'down';
+    el.innerHTML =
+      `<span>O <b>${fmt(b.open)}</b></span><span>H <b>${fmt(b.high)}</b></span>` +
+      `<span>L <b>${fmt(b.low)}</b></span><span>C <b class="${cls}">${fmt(b.close)}</b></span>` +
+      `<span>Vol <b>${fmt(b.volume, 0)}</b></span>`;
+  }
+  // ---------- data ----------
+  function onBars(bars, reset) {
+    if (!bars.length) return;
+    S.bars = bars;
+    S.byTime = new Map(bars.map((b) => [toTime(b.date), b]));
+    const last = bars[bars.length - 1];
+    const lastT = toTime(last.date);
+
+    if (reset || S.lastTime == null || !S.main) {
+      S.main.setData(bars.map(pt));
+      updateInd();
+      if (reset) chart.timeScale().fitContent();
+    } else {
+      bars.forEach((b) => {
+        const t = toTime(b.date);
+        if (t >= S.lastTime) {
+          S.main.update(pt(b));
+          if (S.serMap.vol) S.serMap.vol[0].update(volPt(b));
+        }
+      });
+      updateInd();
+    }
+    S.lastTime = lastT;
+    updateHeader(last, bars.length > 1 ? bars[bars.length - 2] : null);
+    renderLegend(last);
+  }
+
+  function updateHeader(last, prev) {
+    const row = S.symbols.find((s) => s.ticker === S.ticker);
+    let price = last.close, chgAbs, chgPct;
+    if (row && S.tf === '1D') {
+      price = row.price; chgAbs = row.change; chgPct = row.changePct;
+    } else if (prev) {
+      chgAbs = last.close - prev.close; chgPct = (chgAbs / prev.close) * 100;
+    }
+    const lastEl = $('#last');
+    if (S.lastPrice != null && price !== S.lastPrice) {
+      lastEl.classList.remove('flash-up', 'flash-down');
+      void lastEl.offsetWidth;
+      lastEl.classList.add(price > S.lastPrice ? 'flash-up' : 'flash-down');
+    }
+    S.lastPrice = price;
+    lastEl.textContent = fmt(price);
+    const chgEl = $('#chg');
+    if (chgAbs == null) { chgEl.textContent = '--'; chgEl.className = 'mono muted'; return; }
+    chgEl.textContent = `${chgAbs >= 0 ? '+' : ''}${fmt(chgAbs)}  (${chgPct >= 0 ? '+' : ''}${fmt(chgPct)}%)`;
+    chgEl.className = 'mono ' + (chgAbs >= 0 ? 'up' : 'down');
+  }
+
+  async function loadBars(reset) {
+    const tk = S.ticker, tf = S.tf;
+    try {
+      const r = await fetch(`/api/history?symbol=${encodeURIComponent(tk)}&tf=${encodeURIComponent(tf)}&bars=500`, { cache: 'no-store' });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'no data');
+      if (tk !== S.ticker || tf !== S.tf) return;
+      onBars(j.bars, reset);
+      setStatus('Live', true);
+    } catch (e) {
+      setStatus('Retrying feed', false);
+    }
+  }
+
+  async function loadSymbols() {
+    try {
+      const r = await fetch('/api/symbols', { cache: 'no-store' });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'symbols');
+      S.symbols = j.symbols || [];
+      renderList();
+      const row = S.symbols.find((s) => s.ticker === S.ticker);
+      if (row) $('#symName').textContent = row.name || '';
+    } catch (e) {
+      if (!S.symbols.length) $('#list').innerHTML = '<div class="empty">Symbols unavailable. Retrying.</div>';
+    }
+  }
+
+  function renderList() {
+    const q = $('#filter').value.trim().toUpperCase();
+    const rows = S.symbols.filter((s) => !q || s.ticker.includes(q) || (s.name || '').toUpperCase().includes(q));
+    if (!rows.length) {
+      $('#list').innerHTML = `<div class="empty">${q ? 'No match. Press Enter to open ' + esc(q) + '.' : 'No symbols.'}</div>`;
+      return;
+    }
+    $('#list').innerHTML = rows.map((s) => {
+      const cls = s.changePct >= 0 ? 'up' : 'down';
+      return `<button class="row" data-t="${esc(s.ticker)}" aria-current="${s.ticker === S.ticker}">` +
+        `<span><span class="tk">${esc(s.ticker)}</span><span class="nm">${esc(s.name)}</span></span>` +
+        `<span class="pr">${fmt(s.price)}</span>` +
+        `<span class="cg ${cls}">${s.changePct >= 0 ? '+' : ''}${fmt(s.changePct)}</span></button>`;
+    }).join('');
+  }
+
+  function setTicker(t) {
+    S.ticker = String(t).toUpperCase().trim();
+    if (!S.ticker) return;
+    $('#sym').textContent = S.ticker;
+    const row = S.symbols.find((s) => s.ticker === S.ticker);
+    $('#symName').textContent = row ? row.name : '';
+    S.lastTime = null; S.lastPrice = null;
+    S.drawings = loadDrawings(); S.pending = null; S.hover = null;
+    renderList();
+    loadBars(true);
+  }
+
+  function setTf(tf) {
+    S.tf = tf;
+    document.querySelectorAll('#tfs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tf === tf)));
+    try { localStorage.setItem(LS.tf, tf); } catch (e) { /* storage blocked */ }
+    S.lastTime = null; S.lastPrice = null;
+    S.drawings = loadDrawings(); S.pending = null;
+    loadBars(true);
+  }
+
+  function setType(t) {
+    S.type = t;
+    document.querySelectorAll('#types button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.type === t)));
+    try { localStorage.setItem(LS.type, t); } catch (e) { /* storage blocked */ }
+    if (S.main) chart.removeSeries(S.main);
+    addMain();
+  }
+
+  function toggleInd(id, on) {
+    if (on) S.ind.add(id); else S.ind.delete(id);
+    try { localStorage.setItem(LS.ind, JSON.stringify([...S.ind])); } catch (e) { /* storage blocked */ }
+    updateIndButton();
+    rebuildInd();
+    updateInd();
+  }
+  function updateIndButton() {
+    $('#indBtn').textContent = S.ind.size ? `Indicators (${S.ind.size})` : 'Indicators';
+    document.querySelectorAll('[data-ind]').forEach((c) => { c.checked = S.ind.has(c.dataset.ind); });
+  }
+
+  // ---------- wiring ----------
+  document.querySelectorAll('#tfs button').forEach((b) => b.addEventListener('click', () => setTf(b.dataset.tf)));
+  document.querySelectorAll('#types button').forEach((b) => b.addEventListener('click', () => setType(b.dataset.type)));
+  document.querySelectorAll('#scale button').forEach((b) => b.addEventListener('click', () => {
+    S.scale = b.dataset.scale; applyScale();
+  }));
+  $('#logBtn').addEventListener('click', () => { S.log = !S.log; applyScale(); });
+  $('#resetBtn').addEventListener('click', () => { S.scale = 'auto'; applyScale(); chart.timeScale().fitContent(); });
+
+  $('#indBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const m = $('#indMenu');
+    const open = m.classList.toggle('hidden') === false;
+    $('#indBtn').setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.pop-wrap')) { $('#indMenu').classList.add('hidden'); $('#indBtn').setAttribute('aria-expanded', 'false'); }
+  });
+  document.querySelectorAll('[data-ind]').forEach((c) => c.addEventListener('change', () => toggleInd(c.dataset.ind, c.checked)));
+
+  $('#list').addEventListener('click', (e) => {
+    const row = e.target.closest('.row');
+    if (row) setTicker(row.dataset.t);
+  });
+  $('#filter').addEventListener('input', renderList);
+  $('#filter').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const q = $('#filter').value.trim().toUpperCase();
+    const exact = S.symbols.find((s) => s.ticker === q);
+    setTicker(exact ? exact.ticker : q);
+    $('#filter').value = ''; renderList();
+  });
+
+  // ---------- restore preferences ----------
+  try {
+    const savedType = localStorage.getItem(LS.type); if (savedType) S.type = savedType;
+    const savedTf = localStorage.getItem(LS.tf); if (savedTf) S.tf = savedTf;
+    const savedScale = localStorage.getItem(LS.scale); if (savedScale) S.scale = savedScale;
+    S.log = localStorage.getItem(LS.log) === '1';
+    const savedInd = JSON.parse(localStorage.getItem(LS.ind) || '[]');
+    S.ind = new Set(savedInd.filter((i) => DEF[i]));
+  } catch (e) { /* storage blocked */ }
+
+  document.querySelectorAll('#types button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.type === S.type)));
+  document.querySelectorAll('#tfs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tf === S.tf)));
+
+  addMain();
+  rebuildInd();
+  updateIndButton();
+  applyScale();
+  chart.subscribeCrosshairMove((p) => {
+    const b = p && p.time !== undefined ? S.byTime.get(p.time) : null;
+    renderLegend(b || S.bars[S.bars.length - 1]);
+  });
+
+  setTicker(S.ticker);
+  loadSymbols();
+
+  setInterval(() => { if (!document.hidden) loadBars(false); }, 10000);
+  setInterval(() => { if (!document.hidden) loadSymbols(); }, 15000);
+  setInterval(() => {
+    const d = new Date();
+    $('#clock').textContent = d.toISOString().slice(11, 19) + ' UTC';
+  }, 1000);
+})();
+</script>
+</body>
+</html>
