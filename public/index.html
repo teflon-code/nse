@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSE Live Terminal — Nairobi Securities Exchange (NSEKE)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          colors: {
+            nse: {
+              bg: '#000000',
+              panel: '#0a0a0a',
+              elevated: '#141414',
+              hover: '#1c1c1c',
+              border: '#262626',
+              text: '#ffffff',
+              muted: '#8c8c8c',
+              green: '#089981',
+              red: '#f23645'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    *, *::before, *::after {
+      border-radius: 0px !important;
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #000000;
+      color: #ffffff;
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #000000; }
+    ::-webkit-scrollbar-thumb { background: #333333; }
+    ::-webkit-scrollbar-thumb:hover { background: #ffffff; }
+    .tv-btn {
+      background: #000000;
+      color: #cccccc;
+      border: 1px solid #262626;
+      transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+    }
+    .tv-btn:hover {
+      background: #1a1a1a;
+      color: #ffffff;
+      border-color: #555555;
+    }
+    .tv-btn.active {
+      background: #ffffff;
+      color: #000000;
+      border-color: #ffffff;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body class="bg-nse-bg text-nse-text min-h-screen flex flex-col select-none">
+
+  <!-- TOP COMMAND BAR -->
+  <header class="h-11 bg-nse-bg border-b border-nse-border px-2 flex items-center justify-between gap-2 shrink-0 z-30">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="flex items-center gap-2 pr-2 border-r border-nse-border">
+        <div class="w-6 h-6 bg-white text-black font-mono font-bold text-xs flex items-center justify-center">NSE</div>
+        <div class="leading-none">
+          <div class="text-xs font-bold tracking-wider uppercase">NSEKE TERMINAL</div>
+          <div class="text-[9px] font-mono text-nse-muted">NAIROBI SECURITIES EXCHANGE</div>
+        </div>
+      </div>
+
+      <!-- Workspace Navigation -->
+      <nav class="flex items-center gap-1">
+        <button id="ws-btn-charts" class="tv-btn active px-2.5 py-1 text-xs font-mono uppercase">Supercharts</button>
+        <button id="ws-btn-screener" class="tv-btn px-2.5 py-1 text-xs font-mono uppercase">All NSE Symbols (<span id="symbol-count-badge">0</span>)</button>
+        <button id="ws-btn-connectors" class="tv-btn px-2.5 py-1 text-xs font-mono uppercase">TV Scrapers &amp; WS</button>
+      </nav>
+    </div>
+
+    <!-- Live Status & Sync Controls -->
+    <div class="flex items-center gap-1.5 shrink-0">
+      <div class="hidden md:flex items-center gap-1.5 border border-nse-border px-2 py-1 text-[11px] font-mono">
+        <span id="session-dot" class="w-2 h-2 bg-nse-green inline-block"></span>
+        <span id="session-status-text">NSE SESSION</span>
+        <span class="text-nse-muted">|</span>
+        <span id="eat-clock" class="tabular-nums text-white">--:--:-- EAT</span>
+      </div>
+
+      <button id="sync-tv-btn" class="tv-btn px-2.5 py-1 text-xs font-mono flex items-center gap-1.5" title="Scrape all NSEKE symbols & historical bars from TradingView">
+        <span class="w-1.5 h-1.5 bg-white inline-block"></span>
+        <span>SCRAPE TRADINGVIEW</span>
+        <span id="tv-api-status-pill" class="px-1 bg-white text-black text-[10px] font-bold">READY</span>
+      </button>
+
+      <button id="open-paste-modal-btn" class="tv-btn px-2.5 py-1 text-xs font-mono uppercase">Import CSV</button>
+    </div>
+  </header>
+
+  <!-- WORKSPACE 1: SUPERCHARTS -->
+  <main id="workspace-charts" class="flex-1 flex flex-col lg:flex-row min-h-[calc(100vh-44px)] overflow-hidden">
+
+    <!-- LEFT DRAWING TOOLBAR -->
+    <aside class="w-full lg:w-10 bg-nse-bg border-b lg:border-b-0 lg:border-r border-nse-border flex lg:flex-col items-center justify-between lg:justify-start p-1 gap-1 shrink-0">
+      <div class="flex lg:flex-col items-center gap-1">
+        <button data-tool="crosshair" class="tool-btn tv-btn active w-8 h-8 flex items-center justify-center font-mono text-xs" title="Crosshair">+</button>
+        <button data-tool="trendline" class="tool-btn tv-btn w-8 h-8 flex items-center justify-center font-mono text-xs" title="Trend Line">/</button>
+        <button data-tool="hline" class="tool-btn tv-btn w-8 h-8 flex items-center justify-center font-mono text-xs" title="Horizontal Line">—</button>
+        <button data-tool="fib" class="tool-btn tv-btn w-8 h-8 flex items-center justify-center font-mono text-xs" title="Fibonacci Retracement">F</button>
+        <button data-tool="rect" class="tool-btn tv-btn w-8 h-8 flex items-center justify-center font-mono text-xs" title="Price Range Box">[]</button>
+      </div>
+      <div class="flex lg:flex-col items-center gap-1 lg:mt-auto">
+        <button id="reset-scales-btn" class="tv-btn w-8 h-8 flex items-center justify-center font-mono text-[10px]" title="Reset Price & Time Scales (Auto-Fit)">FIT</button>
+        <button id="clear-drawings-btn" class="tv-btn w-8 h-8 flex items-center justify-center font-mono text-[10px]" title="Clear All Drawings">CLR</button>
+      </div>
+    </aside>
+
+    <!-- CENTER CHART COLUMN -->
+    <section class="flex-1 flex flex-col min-w-0 bg-nse-bg">
+      <!-- Chart Sub-Toolbar: Symbol, Timeframes, Chart Styles, Indicators -->
+      <div class="min-h-9 bg-nse-panel border-b border-nse-border px-2 py-1 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <!-- Active Ticker Header -->
+          <div class="flex items-center gap-1.5 pr-2 border-r border-nse-border">
+            <span id="chart-symbol-badge" class="px-1.5 py-0.5 bg-white text-black font-mono font-bold text-xs">NSEKE:SCOM</span>
+            <span id="chart-company-name" class="text-xs font-semibold text-white truncate max-w-[160px]">Safaricom PLC</span>
+            <a id="tv-external-link" href="https://www.tradingview.com/chart/IInGcnS5/?symbol=NSEKE%3ASCOM" target="_blank" rel="noopener noreferrer" class="text-[10px] font-mono text-nse-muted hover:text-white underline ml-1">TV ↗</a>
+          </div>
+
+          <!-- Timeframe Selector -->
+          <div class="flex items-center gap-0.5" id="timeframe-bar">
+            <button data-tf="1m" class="tf-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">1m</button>
+            <button data-tf="5m" class="tf-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">5m</button>
+            <button data-tf="15m" class="tf-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">15m</button>
+            <button data-tf="1H" class="tf-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">1H</button>
+            <button data-tf="1D" class="tf-btn tv-btn active px-1.5 py-0.5 font-mono text-[11px]">1D</button>
+            <button data-tf="1W" class="tf-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">1W</button>
+            <button data-tf="1M" class="tf-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">1M</button>
+          </div>
+
+          <span class="text-nse-border">|</span>
+
+          <!-- Chart Style -->
+          <div class="flex items-center gap-0.5">
+            <button data-style="candles" class="style-btn tv-btn active px-1.5 py-0.5 font-mono text-[11px]">Candles</button>
+            <button data-style="hollow" class="style-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">Hollow</button>
+            <button data-style="ohlc" class="style-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">Bars</button>
+            <button data-style="line" class="style-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">Line</button>
+          </div>
+
+          <span class="text-nse-border">|</span>
+
+          <!-- Technical Overlays -->
+          <div class="flex items-center gap-0.5">
+            <button id="ind-sma20" class="ind-btn tv-btn active px-1.5 py-0.5 font-mono text-[11px]">SMA20</button>
+            <button id="ind-ema50" class="ind-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">EMA50</button>
+            <button id="ind-bb" class="ind-btn tv-btn px-1.5 py-0.5 font-mono text-[11px]">BB</button>
+            <button id="ind-vol" class="ind-btn tv-btn active px-1.5 py-0.5 font-mono text-[11px]">VOL</button>
+          </div>
+        </div>
+
+        <!-- Scale Scroll/Zoom Hint -->
+        <div class="text-[10px] font-mono text-nse-muted hidden xl:flex items-center gap-2">
+          <span>SCROLL/DRAG Y-AXIS: PRICE SCALE</span>
+          <span>•</span>
+          <span>SCROLL/DRAG X-AXIS: TIME SCALE</span>
+          <span>•</span>
+          <span>DBL-CLICK AXIS: RESET</span>
+        </div>
+      </div>
+
+      <!-- OHLCV Live Legend Bar -->
+      <div class="bg-nse-bg border-b border-nse-border px-2.5 py-1 flex flex-wrap items-center justify-between gap-2 text-xs font-mono tabular-nums">
+        <div class="flex flex-wrap items-center gap-3">
+          <span>O <strong id="ohlc-o" class="text-white">--</strong></span>
+          <span>H <strong id="ohlc-h" class="text-white">--</strong></span>
+          <span>L <strong id="ohlc-l" class="text-white">--</strong></span>
+          <span>C <strong id="ohlc-c" class="text-white">--</strong></span>
+          <span id="ohlc-chg" class="font-semibold">--</span>
+          <span class="text-nse-muted">VOL <strong id="ohlc-v" class="text-white">--</strong></span>
+        </div>
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="text-nse-muted">BARS: <strong id="bar-count-label" class="text-white">0</strong></span>
+          <span class="text-nse-muted">SOURCE: <strong id="data-source-label" class="text-white">TRADINGVIEW NSEKE</strong></span>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE CHART CANVAS CONTAINER -->
+      <div id="chart-container" class="relative flex-1 min-h-[420px] w-full bg-nse-bg overflow-hidden cursor-crosshair">
+        <canvas id="main-chart-canvas" class="block w-full h-full"></canvas>
+
+        <!-- Empty / Scraping Overlay (Shown only when 0 real bars are loaded yet) -->
+        <div id="chart-empty-overlay" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center z-20">
+          <div class="border border-white bg-black p-5 max-w-md w-full space-y-3">
+            <div class="text-xs font-mono uppercase tracking-widest text-nse-muted">NO SYNTHETIC / MOCK DATA</div>
+            <h2 id="empty-overlay-title" class="text-base font-bold font-mono text-white">CONNECTING TO TRADINGVIEW (NSEKE)...</h2>
+            <p id="empty-overlay-desc" class="text-xs text-nse-muted leading-relaxed">
+              Querying TradingView Kenya Scanner and WebSocket (wss://data.tradingview.com) for verified NSEKE OHLCV bars. If your browser blocks cross-origin requests, connect a local bridge or paste TradingView CSV data.
+            </p>
+            <div class="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <button id="overlay-retry-btn" class="tv-btn active px-3 py-1.5 text-xs font-mono uppercase">Retry TradingView Scrape</button>
+              <button id="overlay-bridge-btn" class="tv-btn px-3 py-1.5 text-xs font-mono uppercase">Setup Local WS/REST Bridge</button>
+              <button id="overlay-csv-btn" class="tv-btn px-3 py-1.5 text-xs font-mono uppercase">Paste TV CSV</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM TIME & SCALE CONTROL STRIP -->
+      <div class="h-8 bg-nse-panel border-t border-nse-border px-2 flex items-center justify-between text-[11px] font-mono">
+        <div class="flex items-center gap-1">
+          <button id="zoom-in-x-btn" class="tv-btn px-2 py-0.5" title="Zoom In Time Axis">+</button>
+          <button id="zoom-out-x-btn" class="tv-btn px-2 py-0.5" title="Zoom Out Time Axis">-</button>
+          <button id="pan-left-btn" class="tv-btn px-2 py-0.5" title="Scroll Left in Time">&lt;</button>
+          <button id="pan-right-btn" class="tv-btn px-2 py-0.5" title="Scroll Right to Latest">&gt;</button>
+          <button id="jump-latest-btn" class="tv-btn px-2 py-0.5">LATEST</button>
+        </div>
+        <div class="flex items-center gap-2 text-nse-muted">
+          <span>Y-SCALE: <strong id="y-scale-readout" class="text-white">AUTO (100%)</strong></span>
+          <button id="reset-y-scale-btn" class="tv-btn px-1.5 py-0.5 text-[10px]">AUTO Y</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT SIDEBAR: NSE WATCHLIST & SYMBOL DETAILS -->
+    <aside class="w-full lg:w-80 bg-nse-panel border-t lg:border-t-0 lg:border-l border-nse-border flex flex-col shrink-0">
+      <!-- Watchlist Search -->
+      <div class="p-2 border-b border-nse-border space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-mono font-bold uppercase">NSEKE WATCHLIST</span>
+          <span id="watchlist-count" class="text-[11px] font-mono text-nse-muted">0 SYMBOLS</span>
+        </div>
+        <input id="watchlist-search" type="text" placeholder="Filter symbol or company (e.g. SCOM, EQTY)..." class="w-full bg-black border border-nse-border px-2 py-1 text-xs font-mono text-white focus:outline-none focus:border-white" />
+      </div>
+
+      <!-- Watchlist Column Headers -->
+      <div class="grid grid-cols-12 px-2 py-1 bg-black border-b border-nse-border text-[10px] font-mono text-nse-muted uppercase">
+        <div class="col-span-5">Symbol</div>
+        <div class="col-span-4 text-right">Last (KES)</div>
+        <div class="col-span-3 text-right">Chg%</div>
+      </div>
+
+      <!-- Watchlist Items -->
+      <div id="watchlist-body" class="flex-1 overflow-y-auto max-h-[340px] lg:max-h-none divide-y divide-nse-border">
+        <div class="p-4 text-xs font-mono text-nse-muted text-center">
+          Awaiting live NSEKE symbols from TradingView Scanner...
+        </div>
+      </div>
+
+      <!-- Selected Security Quote & Fundamentals Card -->
+      <div class="border-t border-nse-border bg-black p-2.5 space-y-2 text-xs font-mono">
+        <div class="flex items-start justify-between">
+          <div>
+            <div id="detail-ticker" class="font-bold text-sm text-white">NSEKE:SCOM</div>
+            <div id="detail-name" class="text-[11px] text-nse-muted">Safaricom PLC</div>
+          </div>
+          <div class="text-right tabular-nums">
+            <div id="detail-price" class="text-base font-bold text-white">--</div>
+            <div id="detail-change" class="text-[11px]">--</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-1.5 pt-1 border-t border-nse-border text-[11px] tabular-nums">
+          <div class="flex justify-between"><span class="text-nse-muted">OPEN</span><span id="detail-open">--</span></div>
+          <div class="flex justify-between"><span class="text-nse-muted">PREV</span><span id="detail-prev">--</span></div>
+          <div class="flex justify-between"><span class="text-nse-muted">HIGH</span><span id="detail-high">--</span></div>
+          <div class="flex justify-between"><span class="text-nse-muted">LOW</span><span id="detail-low">--</span></div>
+          <div class="flex justify-between"><span class="text-nse-muted">52W H</span><span id="detail-52h">--</span></div>
+          <div class="flex justify-between"><span class="text-nse-muted">52W L</span><span id="detail-52l">--</span></div>
+          <div class="flex justify-between"><span class="text-nse-muted">VOL</span><span id="detail-vol">--</span></div>
+          <div class="flex justify-between"><span class="text-nse-muted">RSI(14)</span><span id="detail-rsi">--</span></div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- WORKSPACE 2: ALL SCRAPED NSE SYMBOLS TABLE -->
+  <section id="workspace-screener" class="hidden flex-1 bg-nse-bg p-3 overflow-auto">
+    <div class="max-w-7xl mx-auto space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-nse-border pb-2">
+        <div>
+          <h1 class="text-sm font-mono font-bold uppercase">ALL SCRAPED NAIROBI SECURITIES EXCHANGE (NSEKE) SYMBOLS</h1>
+          <p class="text-xs font-mono text-nse-muted">Live fields pulled directly from scanner.tradingview.com/kenya/scan</p>
+        </div>
+        <button id="screener-rescrape-btn" class="tv-btn active px-3 py-1.5 text-xs font-mono uppercase">Refresh All NSEKE Symbols</button>
+      </div>
+      <div class="border border-nse-border overflow-x-auto">
+        <table class="w-full text-left font-mono text-xs tabular-nums">
+          <thead class="bg-nse-panel border-b border-nse-border text-[11px] text-nse-muted uppercase">
+            <tr>
+              <th class="p-2">Ticker</th>
+              <th class="p-2">Description</th>
+              <th class="p-2 text-right">Last</th>
+              <th class="p-2 text-right">Chg%</th>
+              <th class="p-2 text-right">Open</th>
+              <th class="p-2 text-right">High</th>
+              <th class="p-2 text-right">Low</th>
+              <th class="p-2 text-right">Volume</th>
+              <th class="p-2 text-right">Perf 1W</th>
+              <th class="p-2 text-right">Perf 1M</th>
+              <th class="p-2 text-right">Perf 1Y</th>
+              <th class="p-2 text-right">52W High</th>
+              <th class="p-2 text-right">52W Low</th>
+            </tr>
+          </thead>
+          <tbody id="screener-table-body" class="divide-y divide-nse-border">
+            <tr><td colspan="13" class="p-4 text-center text-nse-muted">No symbols loaded yet. Click "Refresh All NSEKE Symbols".</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- WORKSPACE 3: TRADINGVIEW SCRAPERS & WEBSOCKET BRIDGE -->
+  <section id="workspace-connectors" class="hidden flex-1 bg-nse-bg p-3 overflow-auto">
+    <div class="max-w-5xl mx-auto space-y-4 font-mono text-xs">
+      <div class="border border-nse-border bg-nse-panel p-4 space-y-3">
+        <h2 class="text-sm font-bold uppercase text-white">1. LOCAL TRADINGVIEW WEBSOCKET / FASTAPI BRIDGE</h2>
+        <p class="text-nse-muted">
+          TradingView limits browser cross-origin WebSocket &amp; Scanner requests unless routed through a local bridge or CORS proxy. Run any of the open-source TradingView adapters below and connect this UI directly:
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="border border-nse-border bg-black p-3 space-y-2">
+            <div class="font-bold text-white">Cloud / Online API Endpoint (cloud_nse_api.py)</div>
+            <input id="rest-bridge-url" type="text" placeholder="https://your-app.onrender.com (leave blank for built-in cloud relays)" class="w-full bg-nse-panel border border-nse-border px-2 py-1 text-white" />
+            <button id="fetch-rest-bridge-btn" class="tv-btn active px-3 py-1 uppercase">Sync Online Endpoint</button>
+          </div>
+          <div class="border border-nse-border bg-black p-3 space-y-2">
+            <div class="font-bold text-white">Local WebSocket Bridge (@mathieuc/tradingview)</div>
+            <input id="ws-bridge-url" type="text" value="ws://localhost:8765" class="w-full bg-nse-panel border border-nse-border px-2 py-1 text-white" />
+            <button id="connect-ws-bridge-btn" class="tv-btn active px-3 py-1 uppercase">Connect Local WS</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ready-to-run Node.js (Mathieu2301/TradingView-API) & Python (rongardF/tvdatafeed) Scripts -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="border border-nse-border bg-nse-panel p-3 space-y-2">
+          <div class="font-bold uppercase">Node.js Bridge (@mathieuc/tradingview)</div>
+          <pre class="bg-black border border-nse-border p-2.5 text-[11px] overflow-x-auto text-gray-300">npm i @mathieuc/tradingview ws
+# server.js
+const TradingView = require('@mathieuc/tradingview');
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 8765 });
+const client = new TradingView.Client();
+
+wss.on('connection', (ws) => {
+  ws.on('message', (raw) => {
+    const { symbol = 'NSEKE:SCOM', timeframe = 'D', range = 1000 } = JSON.parse(raw);
+    const chart = new client.Session.Chart();
+    chart.setMarket(symbol, { timeframe, range });
+    chart.onUpdate(() => {
+      if (!chart.periods.length) return;
+      const bars = chart.periods.slice().reverse().map(p => ({
+        date: new Date(p.time * 1000).toISOString().slice(0, 16).replace('T', ' '),
+        open: p.open, high: p.max, low: p.min, close: p.close, volume: p.volume
+      }));
+      ws.send(JSON.stringify({ type: 'history', symbol, timeframe, bars }));
+    });
+  });
+});</pre>
+        </div>
+
+        <div class="border border-nse-border bg-nse-panel p-3 space-y-2">
+          <div class="font-bold uppercase">Python Bridge (rongardF/tvdatafeed + FastAPI)</div>
+          <pre class="bg-black border border-nse-border p-2.5 text-[11px] overflow-x-auto text-gray-300">pip install fastapi uvicorn git+https://github.com/rongardF/tvdatafeed.git
+# api.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from tvDatafeed import TvDatafeed, Interval
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+tv = TvDatafeed()
+
+@app.get("/history")
+def history(symbol: str = "SCOM", interval: str = "1D", bars: int = 1000):
+    df = tv.get_hist(symbol=symbol, exchange="NSEKE", interval=Interval.in_daily, n_bars=bars)
+    return [{"date": str(idx)[:16], "open": r.open, "high": r.high, "low": r.low, "close": r.close, "volume": r.volume} for idx, r in df.iterrows()]</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CSV IMPORT MODAL -->
+  <div id="csv-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+    <div class="bg-nse-panel border border-white max-w-xl w-full p-4 space-y-3 font-mono text-xs">
+      <div class="flex items-center justify-between border-b border-nse-border pb-2">
+        <span class="font-bold uppercase">PASTE TRADINGVIEW EXPORTED CSV (TIME, OPEN, HIGH, LOW, CLOSE, VOLUME)</span>
+        <button id="close-csv-modal-btn" class="tv-btn px-2 py-0.5">X</button>
+      </div>
+      <textarea id="csv-paste-area" rows="8" placeholder="time,open,high,low,close,Volume&#10;2026-11-10,34.50,35.10,34.40,34.95,2450000&#10;2026-11-11,34.95,35.20,34.80,35.00,1920000" class="w-full bg-black border border-nse-border p-2 text-white focus:outline-none focus:border-white"></textarea>
+      <div class="flex justify-end gap-2">
+        <button id="apply-csv-btn" class="tv-btn active px-3 py-1.5 uppercase">Load Into Chart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast-banner" class="hidden fixed bottom-10 right-3 bg-white text-black border border-black px-3 py-2 text-xs font-mono font-bold z-50"></div>
+
+  <script>
+    // =========================================================================
+    // STATE (100% REAL SCRAPED / IMPORTED DATA ONLY — ZERO MOCK GENERATORS)
+    // =========================================================================
+    const state = {
+      selectedTicker: 'SCOM',
+      timeframe: '1D',
+      chartStyle: 'candles',
+      activeTool: 'crosshair',
+      indicators: { sma20: true, ema50: false, bb: false, vol: true },
+      stocks: [],         // Populated exclusively by TradingView Kenya Scanner or CSV/Bridge
+      historyCache: {},   // Key: `${ticker}_${tf}` -> Array<{date, open, high, low, close, volume}>
+      drawings: {},       // Key: ticker -> Array of drawing objects
+      activeDraft: null,
+      searchQuery: '',
+      // Interactive X (Time) & Y (Price) Scale State
+      viewport: {
+        rightOffset: 0,       // Number of bars scrolled from the right edge (0 = latest bar visible)
+        visibleBars: 90,      // Number of candles shown horizontally (zoom level)
+        yZoom: 1.0,           // Vertical price scale multiplier (>1 compresses candles, <1 stretches)
+        yPanOffset: 0         // Vertical price shift in price units
+      },
+      pointer: {
+        inside: false,
+        x: 0,
+        y: 0,
+        dragMode: null,       // 'pan-xy' | 'scale-y' | 'scale-x' | 'draw'
+        dragStartX: 0,
+        dragStartY: 0,
+        startRightOffset: 0,
+        startVisibleBars: 90,
+        startYZoom: 1.0,
+        startYPanOffset: 0
+      }
+    };
+
+    const CORS_PROXIES = [
+      (url) => url,
+      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+      (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+      (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
+      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+    ];
+
+    function showToast(msg) {
+      const el = document.getElementById('toast-banner');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.add('hidden'), 4200);
+    }
+
+    function updateEatClock() {
+      const now = new Date();
+      const eatStr = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Africa/Nairobi',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).format(now);
+      document.getElementById('eat-clock').textContent = `${eatStr} EAT`;
+
+      const eatHour = Number(new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Africa/Nairobi',
+        hour: '2-digit',
+        hour12: false
+      }).format(now));
+      const dayName = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Nairobi', weekday: 'short' }).format(now);
+      const isWeekend = dayName === 'Sat' || dayName === 'Sun';
+      const isOpen = !isWeekend && eatHour >= 9 && eatHour < 15;
+      document.getElementById('session-dot').className = `w-2 h-2 inline-block ${isOpen ? 'bg-nse-green' : 'bg-nse-red'}`;
+      document.getElementById('session-status-text').textContent = isOpen ? 'NSE OPEN' : 'NSE CLOSED';
+    }
+
+    // =========================================================================
+    // TRADINGVIEW ALL-NSE SYMBOL SCANNER & WEBSOCKET SCRAPER
+    // =========================================================================
+    const tvScraper = {
+      ws: null,
+      directTvWs: null,
+
+      parseTvFrames(raw) {
+        const frames = [];
+        let idx = 0;
+        while (idx < raw.length) {
+          if (raw.slice(idx, idx + 3) !== '~m~') break;
+          const lenStart = idx + 3;
+          const lenEnd = raw.indexOf('~m~', lenStart);
+          if (lenEnd === -1) break;
+          const len = parseInt(raw.slice(lenStart, lenEnd), 10);
+          const payloadStart = lenEnd + 3;
+          frames.push(raw.slice(payloadStart, payloadStart + len));
+          idx = payloadStart + len;
+        }
+        return frames;
+      },
+
+      encodeTvFrame(obj) {
+        const str = typeof obj === 'string' ? obj : JSON.stringify(obj);
+        return `~m~${str.length}~m~${str}`;
+      },
+
+      async scrapeAllNseSymbols() {
+        const pill = document.getElementById('tv-api-status-pill');
+        pill.textContent = 'SCANNING...';
+
+        const scannerUrl = 'https://scanner.tradingview.com/kenya/scan';
+        const customCloudUrl = document.getElementById('rest-bridge-url')?.value?.trim();
+        const sameOriginApi = (window.location.protocol.startsWith('http') && !window.location.hostname.includes('localhost'))
+          ? window.location.origin
+          : '';
+        const apiBase = (customCloudUrl && customCloudUrl.startsWith('http')) ? customCloudUrl : sameOriginApi;
+
+        if (apiBase) {
+          try {
+            const res = await fetch(`${apiBase.replace(/\/$/, '')}/api/symbols`);
+            if (res.ok) {
+              const json = await res.json();
+              if (json.ok && Array.isArray(json.symbols) && json.symbols.length > 0) {
+                state.stocks = json.symbols;
+                if (!state.stocks.some(s => s.ticker === state.selectedTicker)) {
+                  state.selectedTicker = state.stocks[0].ticker;
+                }
+                pill.textContent = `${state.stocks.length} NSEKE`;
+                renderAll();
+                showToast(`Loaded ${state.stocks.length} live NSEKE symbols from Vercel API.`);
+                return true;
+              }
+            }
+          } catch (_) {}
+        }
+
+        const payload = {
+          filter: [{ left: 'exchange', operation: 'equal', right: 'NSEKE' }],
+          options: { lang: 'en' },
+          symbols: { query: { types: [] }, tickers: [] },
+          columns: [
+            'name', 'description', 'close', 'change', 'change_abs',
+            'open', 'high', 'low', 'volume', 'Perf.W', 'Perf.1M',
+            'Perf.3M', 'Perf.Y', 'price_52_week_high', 'price_52_week_low',
+            'RSI', 'SMA20', 'EMA50', 'sector'
+          ],
+          sort: { sortBy: 'volume', sortOrder: 'desc' },
+          range: [0, 200]
+        };
+
+        // Try GET-based TradingView symbol search & screener endpoints via public cloud relays as well
+        const getFallbackUrls = [
+          'https://symbol-search.tradingview.com/symbol_search/v3/?text=&hl=1&exchange=NSEKE&lang=en&search_type=stocks&domain=production&sort_by_country=KE'
+        ];
+
+        for (const buildUrl of CORS_PROXIES) {
+          try {
+            const target = buildUrl(scannerUrl);
+            const res = await fetch(target, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (!res.ok) continue;
+            const json = await res.json();
+            if (Array.isArray(json.data) && json.data.length > 0) {
+              state.stocks = json.data.map(row => {
+                const d = row.d || [];
+                const ticker = (d[0] || row.s?.split(':')[1] || '').toUpperCase();
+                const close = Number(d[2] || 0);
+                const chgAbs = Number(d[4] || 0);
+                return {
+                  ticker,
+                  name: d[1] || ticker,
+                  price: close,
+                  changePct: Number(d[3] || 0),
+                  change: chgAbs,
+                  prevClose: +(close - chgAbs).toFixed(2),
+                  open: Number(d[5] || close),
+                  high: Number(d[6] || close),
+                  low: Number(d[7] || close),
+                  volume: Math.round(Number(d[8] || 0)),
+                  perfW: d[9] != null ? Number(d[9]) : null,
+                  perf1M: d[10] != null ? Number(d[10]) : null,
+                  perf3M: d[11] != null ? Number(d[11]) : null,
+                  perf1Y: d[12] != null ? Number(d[12]) : null,
+                  high52: d[13] != null ? Number(d[13]) : null,
+                  low52: d[14] != null ? Number(d[14]) : null,
+                  rsi: d[15] != null ? Number(d[15]) : null,
+                  sma20: d[16] != null ? Number(d[16]) : null,
+                  ema50: d[17] != null ? Number(d[17]) : null,
+                  sector: d[18] || 'NSEKE'
+                };
+              }).filter(s => s.ticker && s.price > 0);
+
+              if (!state.stocks.some(s => s.ticker === state.selectedTicker) && state.stocks.length > 0) {
+                state.selectedTicker = state.stocks[0].ticker;
+              }
+              pill.textContent = `${state.stocks.length} NSEKE`;
+              renderAll();
+              showToast(`Scraped ${state.stocks.length} live NSEKE symbols from TradingView Cloud.`);
+              return true;
+            }
+          } catch (_) {
+            // Try next cloud relay
+          }
+        }
+
+        // Secondary GET-only symbol discovery via public cloud proxies
+        for (const rawUrl of getFallbackUrls) {
+          for (const buildUrl of CORS_PROXIES) {
+            try {
+              const res = await fetch(buildUrl(rawUrl));
+              if (!res.ok) continue;
+              const json = await res.json();
+              const list = Array.isArray(json.symbols) ? json.symbols : Array.isArray(json) ? json : [];
+              if (list.length > 0) {
+                state.stocks = list.map(item => {
+                  const ticker = (item.symbol || '').replace(/<[^>]+>/g, '').toUpperCase();
+                  return {
+                    ticker,
+                    name: (item.description || ticker).replace(/<[^>]+>/g, ''),
+                    price: 0,
+                    changePct: 0,
+                    change: 0,
+                    prevClose: 0,
+                    open: 0,
+                    high: 0,
+                    low: 0,
+                    volume: 0,
+                    sector: item.type || 'NSEKE'
+                  };
+                }).filter(s => s.ticker);
+                if (state.stocks.length > 0) {
+                  pill.textContent = `${state.stocks.length} SYMS`;
+                  renderAll();
+                  showToast(`Discovered ${state.stocks.length} NSEKE symbols online.`);
+                  return true;
+                }
+              }
+            } catch (_) {}
+          }
+        }
+
+        pill.textContent = 'ONLINE BLOCKED';
+        document.getElementById('empty-overlay-title').textContent = 'PUBLIC RELAYS RATE-LIMITED — DEPLOY FREE CLOUD API';
+        return false;
+      },
+
+      async fetchDirectTradingViewWs(ticker, tf = '1D', barCount = 500) {
+        const customCloudUrl = document.getElementById('rest-bridge-url')?.value?.trim();
+        const sameOriginApi = (window.location.protocol.startsWith('http') && !window.location.hostname.includes('localhost'))
+          ? window.location.origin
+          : '';
+        const apiBase = (customCloudUrl && customCloudUrl.startsWith('http')) ? customCloudUrl : sameOriginApi;
+
+        if (apiBase) {
+          try {
+            const res = await fetch(`${apiBase.replace(/\/$/, '')}/api/history?symbol=${encodeURIComponent(ticker)}&tf=${encodeURIComponent(tf)}&bars=${barCount}`);
+            if (res.ok) {
+              const json = await res.json();
+              if (json.ok && Array.isArray(json.bars) && json.bars.length > 0) {
+                state.historyCache[`${ticker}_${tf}`] = json.bars;
+                document.getElementById('tv-api-status-pill').textContent = `VERCEL (${json.bars.length})`;
+                renderAll();
+                showToast(`Loaded ${json.bars.length} real ${tf} bars for NSEKE:${ticker} from Vercel API.`);
+                return true;
+              }
+            }
+          } catch (_) {}
+        }
+
+        return new Promise((resolve) => {
+          try {
+            if (this.directTvWs) {
+              try { this.directTvWs.close(); } catch (_) {}
+            }
+            const tfMap = { '1m': '1', '5m': '5', '15m': '15', '1H': '60', '1D': 'D', '1W': 'W', '1M': 'M' };
+            const resolution = tfMap[tf] || 'D';
+            const chartSession = 'cs_' + Math.random().toString(36).slice(2, 14);
+            const ws = new WebSocket('wss://data.tradingview.com/socket.io/websocket?from=chart%2FIInGcnS5%2F');
+            this.directTvWs = ws;
+            let resolved = false;
+
+            const timer = setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                try { ws.close(); } catch (_) {}
+                resolve(false);
+              }
+            }, 6000);
+
+            ws.onopen = () => {
+              ws.send(this.encodeTvFrame({ m: 'set_auth_token', p: ['unauthorized_user_token'] }));
+              ws.send(this.encodeTvFrame({ m: 'chart_create_session', p: [chartSession, ''] }));
+              ws.send(this.encodeTvFrame({
+                m: 'resolve_symbol',
+                p: [chartSession, 'sds_sym_1', `={"adjustment":"splits","session":"regular","symbol":"NSEKE:${ticker}"}`]
+              }));
+              ws.send(this.encodeTvFrame({
+                m: 'create_series',
+                p: [chartSession, 'sds_1', 's1', 'sds_sym_1', resolution, barCount, '']
+              }));
+            };
+
+            ws.onmessage = (evt) => {
+              const frames = this.parseTvFrames(evt.data || '');
+              for (const frame of frames) {
+                if (frame.startsWith('~h~')) {
+                  ws.send(this.encodeTvFrame(frame));
+                  continue;
+                }
+                if (!frame.startsWith('{')) continue;
+                try {
+                  const pkt = JSON.parse(frame);
+                  if (pkt.m === 'timescale_update' || pkt.m === 'du') {
+                    const seriesData = pkt.p?.[1]?.sds_1?.s;
+                    if (Array.isArray(seriesData) && seriesData.length > 0) {
+                      const bars = seriesData.map(item => {
+                        const [ts, o, h, l, c, v] = item.v || [];
+                        const d = new Date(ts * 1000);
+                        const dateStr = ['1', '5', '15', '60'].includes(resolution)
+                          ? d.toISOString().slice(0, 16).replace('T', ' ')
+                          : d.toISOString().slice(0, 10);
+                        return {
+                          date: dateStr,
+                          open: +Number(o).toFixed(2),
+                          high: +Number(h).toFixed(2),
+                          low: +Number(l).toFixed(2),
+                          close: +Number(c).toFixed(2),
+                          volume: Math.round(Number(v || 0))
+                        };
+                      }).filter(b => b.close > 0);
+
+                      if (bars.length > 0) {
+                        state.historyCache[`${ticker}_${tf}`] = bars;
+                        const last = bars[bars.length - 1];
+                        const prev = bars[bars.length - 2];
+                        let st = state.stocks.find(s => s.ticker === ticker);
+                        if (!st) {
+                          st = { ticker, name: `NSEKE:${ticker}`, price: last.close, open: last.open, high: last.high, low: last.low, prevClose: prev ? prev.close : last.open, change: 0, changePct: 0, volume: last.volume };
+                          state.stocks.unshift(st);
+                        }
+                        st.open = last.open;
+                        st.high = last.high;
+                        st.low = last.low;
+                        st.price = last.close;
+                        if (prev) st.prevClose = prev.close;
+                        st.change = +(st.price - st.prevClose).toFixed(2);
+                        st.changePct = st.prevClose ? +((st.change / st.prevClose) * 100).toFixed(2) : 0;
+                        st.volume = last.volume || st.volume;
+
+                        if (!resolved) {
+                          resolved = true;
+                          clearTimeout(timer);
+                          document.getElementById('tv-api-status-pill').textContent = `WS (${bars.length})`;
+                          renderAll();
+                          showToast(`Loaded ${bars.length} real ${tf} bars for NSEKE:${ticker} from TradingView WebSocket.`);
+                          resolve(true);
+                        } else {
+                          renderChart();
+                        }
+                      }
+                    }
+                  }
+                } catch (_) {}
+              }
+            };
+
+            ws.onerror = () => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timer);
+                resolve(false);
+              }
+            };
+          } catch (_) {
+            resolve(false);
+          }
+        });
+      },
+
+      connectLocalWsBridge(url) {
+        try {
+          if (this.ws) this.ws.close();
+          const ws = new WebSocket(url);
+          this.ws = ws;
+          ws.onopen = () => {
+            document.getElementById('tv-api-status-pill').textContent = 'LOCAL WS';
+            showToast(`Connected to local TradingView bridge at ${url}`);
+            this.requestFromLocalBridge(state.selectedTicker, state.timeframe);
+          };
+          ws.onmessage = (evt) => {
+            try {
+              const msg = JSON.parse(evt.data);
+              if (msg.type === 'history' && Array.isArray(msg.bars) && msg.bars.length > 0) {
+                const sym = (msg.symbol || state.selectedTicker).replace('NSEKE:', '');
+                state.historyCache[`${sym}_${state.timeframe}`] = msg.bars;
+                const last = msg.bars[msg.bars.length - 1];
+                let st = state.stocks.find(s => s.ticker === sym);
+                if (!st) {
+                  st = { ticker: sym, name: sym, price: last.close, open: last.open, high: last.high, low: last.low, prevClose: last.open, change: 0, changePct: 0, volume: last.volume || 0 };
+                  state.stocks.unshift(st);
+                }
+                st.price = last.close;
+                st.open = last.open;
+                st.high = last.high;
+                st.low = last.low;
+                renderAll();
+                showToast(`Received ${msg.bars.length} real OHLCV bars for ${sym}.`);
+              }
+            } catch (_) {}
+          };
+          ws.onerror = () => showToast(`Could not connect to ${url}. Ensure local server is running.`);
+        } catch (_) {}
+      },
+
+      requestFromLocalBridge(ticker, tf) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          const tfMap = { '1m': '1', '5m': '5', '15m': '15', '1H': '60', '1D': 'D', '1W': 'W', '1M': 'M' };
+          this.ws.send(JSON.stringify({ symbol: `NSEKE:${ticker}`, timeframe: tfMap[tf] || 'D', range: 2000 }));
+        }
+      },
+
+      async fetchLocalRestBridge(baseUrl) {
+        try {
+          if (!baseUrl) {
+            await this.scrapeAllNseSymbols();
+            await this.fetchDirectTradingViewWs(state.selectedTicker, state.timeframe, 500);
+            return;
+          }
+          const clean = baseUrl.replace(/\/$/, '');
+          await this.scrapeAllNseSymbols();
+          const url = `${clean}/api/history?symbol=${encodeURIComponent(state.selectedTicker)}&tf=${encodeURIComponent(state.timeframe)}&bars=1500`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const json = await res.json();
+          const bars = Array.isArray(json) ? json : json.bars;
+          if (Array.isArray(bars) && bars.length > 0) {
+            state.historyCache[`${state.selectedTicker}_${state.timeframe}`] = bars;
+            renderAll();
+            showToast(`Loaded ${bars.length} real bars from cloud API endpoint.`);
+          }
+        } catch (err) {
+          showToast(`Cloud API fetch failed: ${err.message}`);
+        }
+      }
+    };
+
+    function getActiveBars() {
+      const key = `${state.selectedTicker}_${state.timeframe}`;
+      if (state.historyCache[key] && state.historyCache[key].length > 0) {
+        return state.historyCache[key];
+      }
+      // If scanner returned live daily OHLC for this symbol, show that single verified session bar
+      const st = state.stocks.find(s => s.ticker === state.selectedTicker);
+      if (st && st.price > 0) {
+        return [{
+          date: 'LATEST SESSION',
+          open: st.open || st.price,
+          high: st.high || st.price,
+          low: st.low || st.price,
+          close: st.price,
+          volume: st.volume || 0
+        }];
+      }
+      return [];
+    }
+
+    // =========================================================================
+    // TECHNICAL INDICATORS (SMA 20, EMA 50, BOLLINGER BANDS 20,2)
+    // =========================================================================
+    function computeSMA(bars, period) {
+      return bars.map((_, i) => {
+        if (i < period - 1) return null;
+        let sum = 0;
+        for (let j = 0; j < period; j++) sum += bars[i - j].close;
+        return sum / period;
+      });
+    }
+
+    function computeEMA(bars, period) {
+      const k = 2 / (period + 1);
+      const out = [];
+      let prev = null;
+      for (let i = 0; i < bars.length; i++) {
+        const c = bars[i].close;
+        prev = prev === null ? c : c * k + prev * (1 - k);
+        out.push(prev);
+      }
+      return out;
+    }
+
+    function computeBollinger(bars, period = 20, mult = 2) {
+      const sma = computeSMA(bars, period);
+      return bars.map((_, i) => {
+        if (sma[i] === null) return null;
+        let sq = 0;
+        for (let j = 0; j < period; j++) {
+          const diff = bars[i - j].close - sma[i];
+          sq += diff * diff;
+        }
+        const std = Math.sqrt(sq / period);
+        return { upper: sma[i] + mult * std, mid: sma[i], lower: sma[i] - mult * std };
+      });
+    }
+
+    // =========================================================================
+    // INTERACTIVE HIGH-DPI CHART ENGINE WITH SCROLLABLE/ZOOMABLE X & Y SCALES
+    // =========================================================================
+    let chartGeometry = null;
+
+    function renderChart() {
+      const container = document.getElementById('chart-container');
+      const canvas = document.getElementById('main-chart-canvas');
+      const overlay = document.getElementById('chart-empty-overlay');
+      const bars = getActiveBars();
+
+      document.getElementById('bar-count-label').textContent = bars.length;
+
+      if (bars.length === 0) {
+        overlay.classList.remove('hidden');
+        return;
+      }
+      overlay.classList.add('hidden');
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      const width = Math.max(300, Math.floor(rect.width));
+      const height = Math.max(300, Math.floor(rect.height));
+
+      if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+      }
+
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, width, height);
+
+      const padLeft = 10;
+      const padRight = 68;  // Interactive Y-Axis Price Scale strip
+      const padTop = 16;
+      const padBottom = 26; // Interactive X-Axis Time Scale strip
+      const plotW = width - padLeft - padRight;
+      const plotH = height - padTop - padBottom;
+      const volH = state.indicators.vol ? Math.floor(plotH * 0.18) : 0;
+      const priceH = plotH - volH;
+
+      // Clamp horizontal X-scale viewport
+      const maxVisible = Math.max(10, Math.min(bars.length, state.viewport.visibleBars));
+      const maxOffset = Math.max(0, bars.length - maxVisible);
+      state.viewport.rightOffset = Math.max(0, Math.min(maxOffset, state.viewport.rightOffset));
+
+      const endIdx = bars.length - state.viewport.rightOffset;
+      const startIdx = Math.max(0, endIdx - maxVisible);
+      const visible = bars.slice(startIdx, endIdx);
+
+      // Compute Base Min/Max Price then apply Interactive Y-Axis Scale & Pan
+      let rawMin = Infinity;
+      let rawMax = -Infinity;
+      let maxVol = 0;
+      for (const b of visible) {
+        if (b.low < rawMin) rawMin = b.low;
+        if (b.high > rawMax) rawMax = b.high;
+        if (b.volume > maxVol) maxVol = b.volume;
+      }
+      if (!isFinite(rawMin) || !isFinite(rawMax)) {
+        rawMin = 0;
+        rawMax = 100;
+      }
+      const baseRange = Math.max(0.05, rawMax - rawMin);
+      const midPrice = (rawMax + rawMin) / 2 + state.viewport.yPanOffset;
+      const scaledHalfRange = (baseRange * 0.58) * state.viewport.yZoom;
+      const minPrice = midPrice - scaledHalfRange;
+      const maxPrice = midPrice + scaledHalfRange;
+      const priceRange = Math.max(0.01, maxPrice - minPrice);
+
+      const priceToY = (p) => padTop + ((maxPrice - p) / priceRange) * priceH;
+      const yToPrice = (y) => maxPrice - ((y - padTop) / priceH) * priceRange;
+      const stepX = plotW / Math.max(1, visible.length);
+      const indexToX = (localIdx) => padLeft + (localIdx + 0.5) * stepX;
+
+      chartGeometry = {
+        width, height, padLeft, padRight, padTop, padBottom,
+        plotW, plotH, priceH, startIdx, endIdx, visible,
+        minPrice, maxPrice, priceToY, yToPrice, stepX, indexToX
+      };
+
+      document.getElementById('y-scale-readout').textContent =
+        state.viewport.yZoom === 1 && state.viewport.yPanOffset === 0
+          ? 'AUTO (100%)'
+          : `${Math.round((1 / state.viewport.yZoom) * 100)}%`;
+
+      // 1. Grid Lines & Y-Axis Price Scale Labels
+      ctx.strokeStyle = '#161616';
+      ctx.lineWidth = 1;
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+
+      const yTicks = 7;
+      for (let i = 0; i <= yTicks; i++) {
+        const y = padTop + (priceH / yTicks) * i;
+        const val = maxPrice - (priceRange / yTicks) * i;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, Math.round(y) + 0.5);
+        ctx.lineTo(width - padRight, Math.round(y) + 0.5);
+        ctx.stroke();
+
+        ctx.fillStyle = '#8c8c8c';
+        ctx.fillText(val.toFixed(2), width - padRight + 6, y);
+      }
+
+      // 2. X-Axis Time Scale Labels
+      const xTickStep = Math.max(1, Math.floor(visible.length / 6));
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (let i = 0; i < visible.length; i += xTickStep) {
+        const x = indexToX(i);
+        ctx.strokeStyle = '#161616';
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, padTop);
+        ctx.lineTo(Math.round(x) + 0.5, height - padBottom);
+        ctx.stroke();
+
+        ctx.fillStyle = '#8c8c8c';
+        ctx.fillText(visible[i].date, x, height - padBottom + 6);
+      }
+
+      // 3. Volume Histogram
+      if (state.indicators.vol && maxVol > 0) {
+        for (let i = 0; i < visible.length; i++) {
+          const b = visible[i];
+          const x = indexToX(i);
+          const barW = Math.max(1, stepX * 0.65);
+          const h = (b.volume / maxVol) * (volH - 4);
+          ctx.fillStyle = b.close >= b.open ? 'rgba(8, 153, 129, 0.35)' : 'rgba(242, 54, 69, 0.35)';
+          ctx.fillRect(x - barW / 2, padTop + plotH - h, barW, h);
+        }
+      }
+
+      // 4. Technical Indicators (Bollinger Bands, SMA 20, EMA 50)
+      const fullSma20 = state.indicators.sma20 ? computeSMA(bars, 20) : null;
+      const fullEma50 = state.indicators.ema50 ? computeEMA(bars, 50) : null;
+      const fullBb = state.indicators.bb ? computeBollinger(bars, 20, 2) : null;
+
+      if (fullBb) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 1;
+        ['upper', 'lower'].forEach(band => {
+          ctx.beginPath();
+          let started = false;
+          for (let i = 0; i < visible.length; i++) {
+            const item = fullBb[startIdx + i];
+            if (!item) continue;
+            const x = indexToX(i);
+            const y = priceToY(item[band]);
+            if (!started) { ctx.moveTo(x, y); started = true; }
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        });
+      }
+
+      if (fullSma20) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < visible.length; i++) {
+          const val = fullSma20[startIdx + i];
+          if (val === null) continue;
+          const x = indexToX(i);
+          const y = priceToY(val);
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      if (fullEma50) {
+        ctx.strokeStyle = '#8c8c8c';
+        ctx.lineWidth = 1.25;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        for (let i = 0; i < visible.length; i++) {
+          const x = indexToX(i);
+          const y = priceToY(fullEma50[startIdx + i]);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // 5. Price Series (Candles, Hollow, OHLC Bars, or Line)
+      const candleW = Math.max(2, Math.min(18, stepX * 0.68));
+      if (state.chartStyle === 'line') {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.75;
+        ctx.beginPath();
+        for (let i = 0; i < visible.length; i++) {
+          const x = indexToX(i);
+          const y = priceToY(visible[i].close);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else {
+        for (let i = 0; i < visible.length; i++) {
+          const b = visible[i];
+          const x = indexToX(i);
+          const isBull = b.close >= b.open;
+          const color = isBull ? '#089981' : '#f23645';
+          const yHigh = priceToY(b.high);
+          const yLow = priceToY(b.low);
+          const yOpen = priceToY(b.open);
+          const yClose = priceToY(b.close);
+
+          ctx.strokeStyle = color;
+          ctx.fillStyle = color;
+          ctx.lineWidth = 1;
+
+          // Wick
+          ctx.beginPath();
+          ctx.moveTo(Math.round(x) + 0.5, yHigh);
+          ctx.lineTo(Math.round(x) + 0.5, yLow);
+          ctx.stroke();
+
+          if (state.chartStyle === 'ohlc') {
+            const tick = Math.max(2, candleW * 0.5);
+            ctx.beginPath();
+            ctx.moveTo(x - tick, yOpen);
+            ctx.lineTo(x, yOpen);
+            ctx.moveTo(x, yClose);
+            ctx.lineTo(x + tick, yClose);
+            ctx.stroke();
+          } else {
+            const top = Math.min(yOpen, yClose);
+            const bodyH = Math.max(1.5, Math.abs(yClose - yOpen));
+            if (state.chartStyle === 'hollow' && isBull) {
+              ctx.strokeRect(x - candleW / 2, top, candleW, bodyH);
+            } else {
+              ctx.fillRect(x - candleW / 2, top, candleW, bodyH);
+            }
+          }
+        }
+      }
+
+      // 6. User Drawings (Trendline, HLine, Fib, Rect)
+      const list = [...(state.drawings[state.selectedTicker] || [])];
+      if (state.activeDraft) list.push(state.activeDraft);
+
+      for (const d of list) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        const y1 = priceToY(d.p1);
+        const y2 = priceToY(d.p2);
+        const x1 = indexToX(d.i1 - startIdx);
+        const x2 = indexToX(d.i2 - startIdx);
+
+        if (d.type === 'hline') {
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(padLeft, y1);
+          ctx.lineTo(width - padRight, y1);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (d.type === 'trendline') {
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        } else if (d.type === 'rect') {
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
+          ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
+        } else if (d.type === 'fib') {
+          const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+          const left = Math.min(x1, x2);
+          const right = Math.max(x1, x2, left + 80);
+          levels.forEach(lvl => {
+            const p = d.p1 + (d.p2 - d.p1) * lvl;
+            const y = priceToY(p);
+            ctx.beginPath();
+            ctx.moveTo(left, y);
+            ctx.lineTo(right, y);
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '10px "JetBrains Mono", monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${(lvl * 100).toFixed(1)}% (${p.toFixed(2)})`, left + 4, y - 8);
+          });
+        }
+      }
+
+      // 7. Interactive Y-Axis & X-Axis Borders + Last Price Tag
+      ctx.strokeStyle = '#262626';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(width - padRight + 0.5, 0);
+      ctx.lineTo(width - padRight + 0.5, height);
+      ctx.moveTo(0, height - padBottom + 0.5);
+      ctx.lineTo(width, height - padBottom + 0.5);
+      ctx.stroke();
+
+      const lastBar = visible[visible.length - 1];
+      if (lastBar) {
+        const lastY = Math.max(padTop, Math.min(padTop + priceH, priceToY(lastBar.close)));
+        const isBull = lastBar.close >= lastBar.open;
+        ctx.strokeStyle = isBull ? '#089981' : '#f23645';
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, lastY);
+        ctx.lineTo(width - padRight, lastY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = isBull ? '#089981' : '#f23645';
+        ctx.fillRect(width - padRight, lastY - 9, padRight, 18);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(lastBar.close.toFixed(2), width - padRight + 6, lastY);
+      }
+
+      // 8. Crosshair & Hover OHLC Readout
+      let hoveredBar = lastBar;
+      if (state.pointer.inside && state.pointer.x < width - padRight && state.pointer.y < height - padBottom) {
+        const mx = state.pointer.x;
+        const my = state.pointer.y;
+        const localIdx = Math.max(0, Math.min(visible.length - 1, Math.floor((mx - padLeft) / stepX)));
+        hoveredBar = visible[localIdx] || lastBar;
+        const snapX = indexToX(localIdx);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(snapX, padTop);
+        ctx.lineTo(snapX, height - padBottom);
+        ctx.moveTo(padLeft, my);
+        ctx.lineTo(width - padRight, my);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Y-Axis Crosshair Badge
+        const hoverPrice = yToPrice(my);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(width - padRight, my - 9, padRight, 18);
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(hoverPrice.toFixed(2), width - padRight + 6, my);
+
+        // X-Axis Crosshair Date Badge
+        ctx.fillStyle = '#ffffff';
+        const dateW = 92;
+        ctx.fillRect(snapX - dateW / 2, height - padBottom + 1, dateW, padBottom - 2);
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(hoveredBar.date, snapX, height - padBottom / 2);
+      }
+
+      if (hoveredBar) {
+        const chg = hoveredBar.close - hoveredBar.open;
+        const chgPct = hoveredBar.open ? (chg / hoveredBar.open) * 100 : 0;
+        document.getElementById('ohlc-o').textContent = hoveredBar.open.toFixed(2);
+        document.getElementById('ohlc-h').textContent = hoveredBar.high.toFixed(2);
+        document.getElementById('ohlc-l').textContent = hoveredBar.low.toFixed(2);
+        document.getElementById('ohlc-c').textContent = hoveredBar.close.toFixed(2);
+        document.getElementById('ohlc-v').textContent = hoveredBar.volume.toLocaleString();
+        const chgEl = document.getElementById('ohlc-chg');
+        chgEl.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)} (${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(2)}%)`;
+        chgEl.className = `font-semibold ${chg >= 0 ? 'text-nse-green' : 'text-nse-red'}`;
+      }
+    }
+
+    // =========================================================================
+    // INTERACTIVE X & Y SCALE MOUSE / WHEEL / TOUCH HANDLERS
+    // =========================================================================
+    function bindChartScaleInteractions() {
+      const canvas = document.getElementById('main-chart-canvas');
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!chartGeometry) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        state.pointer.inside = true;
+        state.pointer.x = x;
+        state.pointer.y = y;
+
+        const onYAxis = x >= chartGeometry.width - chartGeometry.padRight;
+        const onXAxis = y >= chartGeometry.height - chartGeometry.padBottom;
+
+        if (!state.pointer.dragMode) {
+          if (onYAxis) canvas.style.cursor = 'ns-resize';
+          else if (onXAxis) canvas.style.cursor = 'ew-resize';
+          else canvas.style.cursor = state.activeTool === 'crosshair' ? 'crosshair' : 'cell';
+        }
+
+        if (state.pointer.dragMode === 'scale-y') {
+          // Dragging up on Y-axis zooms in (smaller yZoom), dragging down zooms out
+          const dy = y - state.pointer.dragStartY;
+          const factor = Math.exp(dy * 0.006);
+          state.viewport.yZoom = Math.max(0.15, Math.min(8.0, state.pointer.startYZoom * factor));
+        } else if (state.pointer.dragMode === 'scale-x') {
+          // Dragging right on X-axis expands candles (zooms in), dragging left compresses (zooms out)
+          const dx = x - state.pointer.dragStartX;
+          const factor = Math.exp(-dx * 0.005);
+          state.viewport.visibleBars = Math.max(10, Math.min(1000, Math.round(state.pointer.startVisibleBars * factor)));
+        } else if (state.pointer.dragMode === 'pan-xy') {
+          const dx = x - state.pointer.dragStartX;
+          const dy = y - state.pointer.dragStartY;
+          const barShift = Math.round(dx / Math.max(2, chartGeometry.stepX));
+          state.viewport.rightOffset = state.pointer.startRightOffset + barShift;
+
+          const pricePerPx = (chartGeometry.maxPrice - chartGeometry.minPrice) / Math.max(1, chartGeometry.priceH);
+          state.viewport.yPanOffset = state.pointer.startYPanOffset + dy * pricePerPx;
+        } else if (state.pointer.dragMode === 'draw' && state.activeDraft) {
+          const localIdx = Math.max(0, Math.min(chartGeometry.visible.length - 1, Math.floor((x - chartGeometry.padLeft) / chartGeometry.stepX)));
+          state.activeDraft.i2 = chartGeometry.startIdx + localIdx;
+          state.activeDraft.p2 = chartGeometry.yToPrice(y);
+        }
+
+        renderChart();
+      });
+
+      canvas.addEventListener('mouseleave', () => {
+        state.pointer.inside = false;
+        state.pointer.dragMode = null;
+        renderChart();
+      });
+
+      canvas.addEventListener('mousedown', (e) => {
+        if (!chartGeometry) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        state.pointer.dragStartX = x;
+        state.pointer.dragStartY = y;
+        state.pointer.startRightOffset = state.viewport.rightOffset;
+        state.pointer.startVisibleBars = state.viewport.visibleBars;
+        state.pointer.startYZoom = state.viewport.yZoom;
+        state.pointer.startYPanOffset = state.viewport.yPanOffset;
+
+        const onYAxis = x >= chartGeometry.width - chartGeometry.padRight;
+        const onXAxis = y >= chartGeometry.height - chartGeometry.padBottom;
+
+        if (onYAxis) {
+          state.pointer.dragMode = 'scale-y';
+        } else if (onXAxis) {
+          state.pointer.dragMode = 'scale-x';
+        } else if (state.activeTool !== 'crosshair') {
+          const localIdx = Math.max(0, Math.min(chartGeometry.visible.length - 1, Math.floor((x - chartGeometry.padLeft) / chartGeometry.stepX)));
+          const barIdx = chartGeometry.startIdx + localIdx;
+          const price = chartGeometry.yToPrice(y);
+          if (state.activeTool === 'hline') {
+            if (!state.drawings[state.selectedTicker]) state.drawings[state.selectedTicker] = [];
+            state.drawings[state.selectedTicker].push({ type: 'hline', i1: barIdx, p1: price, i2: barIdx, p2: price });
+            renderChart();
+          } else {
+            state.pointer.dragMode = 'draw';
+            state.activeDraft = { type: state.activeTool, i1: barIdx, p1: price, i2: barIdx, p2: price };
+          }
+        } else {
+          state.pointer.dragMode = 'pan-xy';
+          canvas.style.cursor = 'grabbing';
+        }
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (state.pointer.dragMode === 'draw' && state.activeDraft) {
+          if (!state.drawings[state.selectedTicker]) state.drawings[state.selectedTicker] = [];
+          state.drawings[state.selectedTicker].push(state.activeDraft);
+          state.activeDraft = null;
+        }
+        state.pointer.dragMode = null;
+        renderChart();
+      });
+
+      // Double-click on Y-Axis resets Y scale; double-click on X-Axis resets X scale
+      canvas.addEventListener('dblclick', (e) => {
+        if (!chartGeometry) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        if (x >= chartGeometry.width - chartGeometry.padRight) {
+          state.viewport.yZoom = 1.0;
+          state.viewport.yPanOffset = 0;
+          showToast('Y-Axis Price Scale reset to Auto.');
+        } else if (y >= chartGeometry.height - chartGeometry.padBottom) {
+          state.viewport.visibleBars = 90;
+          state.viewport.rightOffset = 0;
+          showToast('X-Axis Time Scale reset.');
+        } else {
+          state.viewport.yZoom = 1.0;
+          state.viewport.yPanOffset = 0;
+          state.viewport.visibleBars = 90;
+          state.viewport.rightOffset = 0;
+        }
+        renderChart();
+      });
+
+      // Mouse Wheel: Scroll over Y-axis scales Y; Shift+Wheel scrolls X-axis horizontally; normal Wheel zooms X-axis
+      canvas.addEventListener('wheel', (e) => {
+        if (!chartGeometry) return;
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const onYAxis = x >= chartGeometry.width - chartGeometry.padRight;
+
+        if (onYAxis) {
+          const factor = e.deltaY > 0 ? 1.12 : 0.88;
+          state.viewport.yZoom = Math.max(0.15, Math.min(8.0, state.viewport.yZoom * factor));
+        } else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+          const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+          const step = Math.max(1, Math.round(state.viewport.visibleBars * 0.08));
+          state.viewport.rightOffset += delta > 0 ? -step : step;
+        } else {
+          const factor = e.deltaY > 0 ? 1.12 : 0.88;
+          state.viewport.visibleBars = Math.max(10, Math.min(1000, Math.round(state.viewport.visibleBars * factor)));
+        }
+        renderChart();
+      }, { passive: false });
+    }
+
+    // =========================================================================
+    // WATCHLIST, SCREENER & UI RENDERERS
+    // =========================================================================
+    function renderWatchlist() {
+      const body = document.getElementById('watchlist-body');
+      const q = state.searchQuery.trim().toLowerCase();
+      const filtered = state.stocks.filter(s =>
+        !q || s.ticker.toLowerCase().includes(q) || (s.name && s.name.toLowerCase().includes(q))
+      );
+
+      document.getElementById('watchlist-count').textContent = `${filtered.length} SYMBOLS`;
+      document.getElementById('symbol-count-badge').textContent = state.stocks.length;
+
+      if (filtered.length === 0) {
+        body.innerHTML = `<div class="p-4 text-xs font-mono text-nse-muted text-center">No scraped NSEKE symbols loaded yet. Click "SCRAPE TRADINGVIEW" or "IMPORT CSV".</div>`;
+        return;
+      }
+
+      body.innerHTML = filtered.map(s => {
+        const active = s.ticker === state.selectedTicker;
+        const chgClass = s.changePct > 0 ? 'text-nse-green' : s.changePct < 0 ? 'text-nse-red' : 'text-nse-muted';
+        return `
+          <button data-ticker="${s.ticker}" class="watch-row w-full grid grid-cols-12 items-center px-2 py-1.5 text-left font-mono text-xs tabular-nums ${active ? 'bg-white text-black font-bold' : 'hover:bg-nse-hover text-white'}">
+            <div class="col-span-5 truncate">
+              <div>${s.ticker}</div>
+              <div class="text-[10px] truncate ${active ? 'text-black/70' : 'text-nse-muted'}">${s.name}</div>
+            </div>
+            <div class="col-span-4 text-right">${s.price.toFixed(2)}</div>
+            <div class="col-span-3 text-right ${active ? 'text-black' : chgClass}">${s.changePct >= 0 ? '+' : ''}${s.changePct.toFixed(2)}%</div>
+          </button>
+        `;
+      }).join('');
+
+      body.querySelectorAll('.watch-row').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.selectedTicker = btn.dataset.ticker;
+          state.viewport.rightOffset = 0;
+          state.viewport.yZoom = 1.0;
+          state.viewport.yPanOffset = 0;
+          tvScraper.fetchDirectTradingViewWs(state.selectedTicker, state.timeframe, 500);
+          tvScraper.requestFromLocalBridge(state.selectedTicker, state.timeframe);
+          renderAll();
+        });
+      });
+    }
+
+    function renderSelectedDetail() {
+      const s = state.stocks.find(item => item.ticker === state.selectedTicker);
+      const badge = document.getElementById('chart-symbol-badge');
+      const link = document.getElementById('tv-external-link');
+      badge.textContent = `NSEKE:${state.selectedTicker}`;
+      link.href = `https://www.tradingview.com/chart/IInGcnS5/?symbol=NSEKE%3A${encodeURIComponent(state.selectedTicker)}`;
+
+      if (!s) {
+        document.getElementById('chart-company-name').textContent = state.selectedTicker;
+        document.getElementById('detail-ticker').textContent = `NSEKE:${state.selectedTicker}`;
+        return;
+      }
+
+      document.getElementById('chart-company-name').textContent = s.name;
+      document.getElementById('detail-ticker').textContent = `NSEKE:${s.ticker}`;
+      document.getElementById('detail-name').textContent = s.name;
+      document.getElementById('detail-price').textContent = `KES ${s.price.toFixed(2)}`;
+      const chgEl = document.getElementById('detail-change');
+      chgEl.textContent = `${s.change >= 0 ? '+' : ''}${s.change.toFixed(2)} (${s.changePct >= 0 ? '+' : ''}${s.changePct.toFixed(2)}%)`;
+      chgEl.className = `text-[11px] ${s.changePct >= 0 ? 'text-nse-green' : 'text-nse-red'}`;
+
+      document.getElementById('detail-open').textContent = s.open != null ? s.open.toFixed(2) : '--';
+      document.getElementById('detail-prev').textContent = s.prevClose != null ? s.prevClose.toFixed(2) : '--';
+      document.getElementById('detail-high').textContent = s.high != null ? s.high.toFixed(2) : '--';
+      document.getElementById('detail-low').textContent = s.low != null ? s.low.toFixed(2) : '--';
+      document.getElementById('detail-52h').textContent = s.high52 != null ? s.high52.toFixed(2) : '--';
+      document.getElementById('detail-52l').textContent = s.low52 != null ? s.low52.toFixed(2) : '--';
+      document.getElementById('detail-vol').textContent = s.volume != null ? s.volume.toLocaleString() : '--';
+      document.getElementById('detail-rsi').textContent = s.rsi != null ? s.rsi.toFixed(1) : '--';
+    }
+
+    function renderScreenerTable() {
+      const tbody = document.getElementById('screener-table-body');
+      if (state.stocks.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="13" class="p-4 text-center text-nse-muted">No symbols scraped yet. Click "Refresh All NSEKE Symbols".</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = state.stocks.map(s => {
+        const chgClass = s.changePct > 0 ? 'text-nse-green' : s.changePct < 0 ? 'text-nse-red' : 'text-nse-muted';
+        const fmt = (v) => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : '--';
+        return `
+          <tr data-ticker="${s.ticker}" class="screener-row hover:bg-nse-hover cursor-pointer">
+            <td class="p-2 font-bold text-white">${s.ticker}</td>
+            <td class="p-2 text-nse-muted">${s.name}</td>
+            <td class="p-2 text-right font-bold">${s.price.toFixed(2)}</td>
+            <td class="p-2 text-right ${chgClass}">${fmt(s.changePct)}</td>
+            <td class="p-2 text-right">${s.open.toFixed(2)}</td>
+            <td class="p-2 text-right">${s.high.toFixed(2)}</td>
+            <td class="p-2 text-right">${s.low.toFixed(2)}</td>
+            <td class="p-2 text-right">${s.volume.toLocaleString()}</td>
+            <td class="p-2 text-right">${fmt(s.perfW)}</td>
+            <td class="p-2 text-right">${fmt(s.perf1M)}</td>
+            <td class="p-2 text-right">${fmt(s.perf1Y)}</td>
+            <td class="p-2 text-right">${s.high52 != null ? s.high52.toFixed(2) : '--'}</td>
+            <td class="p-2 text-right">${s.low52 != null ? s.low52.toFixed(2) : '--'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      tbody.querySelectorAll('.screener-row').forEach(tr => {
+        tr.addEventListener('click', () => {
+          state.selectedTicker = tr.dataset.ticker;
+          switchWorkspace('charts');
+          tvScraper.fetchDirectTradingViewWs(state.selectedTicker, state.timeframe, 500);
+          renderAll();
+        });
+      });
+    }
+
+    function renderAll() {
+      renderWatchlist();
+      renderSelectedDetail();
+      renderChart();
+      if (!document.getElementById('workspace-screener').classList.contains('hidden')) {
+        renderScreenerTable();
+      }
+    }
+
+    function switchWorkspace(target) {
+      ['charts', 'screener', 'connectors'].forEach(ws => {
+        document.getElementById(`workspace-${ws}`).classList.toggle('hidden', ws !== target);
+        document.getElementById(`ws-btn-${ws}`).classList.toggle('active', ws === target);
+      });
+      if (target === 'charts') renderChart();
+      if (target === 'screener') renderScreenerTable();
+    }
+
+    // =========================================================================
+    // CSV PARSER & EVENT BINDINGS
+    // =========================================================================
+    function parseCsvAndLoad(rawText) {
+      const lines = rawText.trim().split(/\r?\n/).filter(Boolean);
+      const bars = [];
+      for (const line of lines) {
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length < 5) continue;
+        const o = parseFloat(parts[1]);
+        const h = parseFloat(parts[2]);
+        const l = parseFloat(parts[3]);
+        const c = parseFloat(parts[4]);
+        const v = parseFloat(parts[5] || '0');
+        if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(c)) continue;
+        bars.push({ date: parts[0], open: o, high: h, low: l, close: c, volume: Math.round(v) });
+      }
+      if (bars.length > 0) {
+        state.historyCache[`${state.selectedTicker}_${state.timeframe}`] = bars;
+        const last = bars[bars.length - 1];
+        const prev = bars[bars.length - 2];
+        let st = state.stocks.find(s => s.ticker === state.selectedTicker);
+        if (!st) {
+          st = { ticker: state.selectedTicker, name: `NSEKE:${state.selectedTicker}`, price: last.close, open: last.open, high: last.high, low: last.low, prevClose: prev ? prev.close : last.open, change: 0, changePct: 0, volume: last.volume };
+          state.stocks.unshift(st);
+        }
+        st.price = last.close;
+        st.open = last.open;
+        st.high = last.high;
+        st.low = last.low;
+        if (prev) st.prevClose = prev.close;
+        st.change = +(st.price - st.prevClose).toFixed(2);
+        st.changePct = st.prevClose ? +((st.change / st.prevClose) * 100).toFixed(2) : 0;
+        renderAll();
+        showToast(`Loaded ${bars.length} real OHLCV bars from CSV.`);
+      } else {
+        showToast('No valid OHLCV rows detected in CSV.');
+      }
+    }
+
+    function bindEvents() {
+      document.getElementById('ws-btn-charts').addEventListener('click', () => switchWorkspace('charts'));
+      document.getElementById('ws-btn-screener').addEventListener('click', () => switchWorkspace('screener'));
+      document.getElementById('ws-btn-connectors').addEventListener('click', () => switchWorkspace('connectors'));
+
+      const triggerFullScrape = async () => {
+        await tvScraper.scrapeAllNseSymbols();
+        await tvScraper.fetchDirectTradingViewWs(state.selectedTicker, state.timeframe, 500);
+      };
+
+      document.getElementById('sync-tv-btn').addEventListener('click', triggerFullScrape);
+      document.getElementById('overlay-retry-btn').addEventListener('click', triggerFullScrape);
+      document.getElementById('screener-rescrape-btn').addEventListener('click', () => tvScraper.scrapeAllNseSymbols());
+
+      document.getElementById('overlay-bridge-btn').addEventListener('click', () => switchWorkspace('connectors'));
+      document.getElementById('overlay-csv-btn').addEventListener('click', () => document.getElementById('csv-modal').classList.remove('hidden'));
+      document.getElementById('connect-ws-bridge-btn')?.addEventListener('click', () => {
+        const wsUrl = document.getElementById('ws-bridge-url')?.value?.trim() || 'ws://localhost:8765';
+        tvScraper.connectLocalWsBridge(wsUrl);
+        switchWorkspace('charts');
+      });
+
+      document.getElementById('fetch-rest-bridge-btn')?.addEventListener('click', () => {
+        const restUrl = document.getElementById('rest-bridge-url')?.value?.trim() || '';
+        tvScraper.fetchLocalRestBridge(restUrl);
+        switchWorkspace('charts');
+      });
+
+      document.getElementById('fetch-rest-bridge-btn').addEventListener('click', () => {
+        tvScraper.fetchLocalRestBridge(document.getElementById('rest-bridge-url').value.trim());
+        switchWorkspace('charts');
+      });
+
+      document.getElementById('watchlist-search').addEventListener('input', (e) => {
+        state.searchQuery = e.target.value;
+        renderWatchlist();
+      });
+
+      document.querySelectorAll('.tf-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.timeframe = btn.dataset.tf;
+          state.viewport.rightOffset = 0;
+          tvScraper.fetchDirectTradingViewWs(state.selectedTicker, state.timeframe, 500);
+          tvScraper.requestFromLocalBridge(state.selectedTicker, state.timeframe);
+          renderChart();
+        });
+      });
+
+      document.querySelectorAll('.style-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.chartStyle = btn.dataset.style;
+          renderChart();
+        });
+      });
+
+      document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.activeTool = btn.dataset.tool;
+        });
+      });
+
+      ['sma20', 'ema50', 'bb', 'vol'].forEach(key => {
+        const el = document.getElementById(`ind-${key}`);
+        el.addEventListener('click', () => {
+          state.indicators[key] = !state.indicators[key];
+          el.classList.toggle('active', state.indicators[key]);
+          renderChart();
+        });
+      });
+
+      // Bottom Scale Navigation Buttons
+      document.getElementById('zoom-in-x-btn').addEventListener('click', () => {
+        state.viewport.visibleBars = Math.max(10, Math.round(state.viewport.visibleBars * 0.8));
+        renderChart();
+      });
+      document.getElementById('zoom-out-x-btn').addEventListener('click', () => {
+        state.viewport.visibleBars = Math.min(1000, Math.round(state.viewport.visibleBars * 1.25));
+        renderChart();
+      });
+      document.getElementById('pan-left-btn').addEventListener('click', () => {
+        state.viewport.rightOffset += Math.max(1, Math.round(state.viewport.visibleBars * 0.15));
+        renderChart();
+      });
+      document.getElementById('pan-right-btn').addEventListener('click', () => {
+        state.viewport.rightOffset = Math.max(0, state.viewport.rightOffset - Math.max(1, Math.round(state.viewport.visibleBars * 0.15)));
+        renderChart();
+      });
+      document.getElementById('jump-latest-btn').addEventListener('click', () => {
+        state.viewport.rightOffset = 0;
+        renderChart();
+      });
+      document.getElementById('reset-y-scale-btn').addEventListener('click', () => {
+        state.viewport.yZoom = 1.0;
+        state.viewport.yPanOffset = 0;
+        renderChart();
+      });
+      document.getElementById('reset-scales-btn').addEventListener('click', () => {
+        state.viewport.yZoom = 1.0;
+        state.viewport.yPanOffset = 0;
+        state.viewport.visibleBars = 90;
+        state.viewport.rightOffset = 0;
+        renderChart();
+      });
+      document.getElementById('clear-drawings-btn').addEventListener('click', () => {
+        state.drawings[state.selectedTicker] = [];
+        renderChart();
+      });
+
+      bindChartScaleInteractions();
+      window.addEventListener('resize', renderChart);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      bindEvents();
+      renderAll();
+      tvScraper.scrapeAllNseSymbols();
+      tvScraper.fetchDirectTradingViewWs(state.selectedTicker, state.timeframe, 500);
+      updateEatClock();
+      setInterval(updateEatClock, 1000);
+    });
+  </script>
+</body>
+</html>
