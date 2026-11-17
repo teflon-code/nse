@@ -301,18 +301,34 @@ def _news_data(ticker):
     return items
 
 
+GROQ_FALLBACKS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+
+
 def _groq(messages, max_tokens=600):
-    key = os.environ.get("GROQ_API_KEY")
+    key = os.environ.get("GROQ_API_KEY", "").strip()
     if not key:
         raise RuntimeError("GROQ_API_KEY is not set on the server")
-    resp = requests.post(
-        GROQ_URL,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={"model": GROQ_MODEL, "messages": messages, "temperature": 0.2, "max_tokens": max_tokens},
-        timeout=25,
-    )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
+    models = []
+    for m in [os.environ.get("GROQ_MODEL", "").strip()] + GROQ_FALLBACKS:
+        if m and m not in models:
+            models.append(m)
+    last_err = None
+    for model in models:
+        resp = requests.post(
+            GROQ_URL,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": model, "messages": messages, "temperature": 0.2, "max_tokens": max_tokens},
+            timeout=25,
+        )
+        if resp.status_code == 200:
+            return resp.json()["choices"][0]["message"]["content"].strip()
+        detail = resp.text[:300]
+        if resp.status_code == 401:
+            raise RuntimeError("Groq rejected the API key (401). Check GROQ_API_KEY on Vercel.")
+        last_err = f"Groq {resp.status_code} for model '{model}': {detail}"
+        if resp.status_code not in (400, 404):
+            break
+    raise RuntimeError(last_err or "Groq request failed")
 
 
 def _quote_snapshot(ticker):
