@@ -301,7 +301,8 @@ def _news_data(ticker):
     return items
 
 
-GROQ_FALLBACKS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+GROQ_FALLBACKS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+GROQ_SKIP = ("whisper", "tts", "guard", "compound", "embed", "orpheus", "prompt")
 
 
 def _groq(messages, max_tokens=600):
@@ -328,7 +329,23 @@ def _groq(messages, max_tokens=600):
         last_err = f"Groq {resp.status_code} for model '{model}': {detail}"
         if resp.status_code not in (400, 404):
             break
-    raise RuntimeError(last_err or "Groq request failed")
+    # Last resort: ask Groq which chat models this key can use right now.
+    try:
+        lst = requests.get("https://api.groq.com/openai/v1/models",
+                           headers={"Authorization": f"Bearer {key}"}, timeout=8)
+        ids = [m.get("id", "") for m in lst.json().get("data", [])] if lst.status_code == 200 else []
+    except Exception:
+        ids = []
+    for model in [i for i in ids if i and not any(k in i.lower() for k in GROQ_SKIP) and i not in models][:3]:
+        resp = requests.post(
+            GROQ_URL,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": model, "messages": messages, "temperature": 0.2, "max_tokens": max_tokens},
+            timeout=25,
+        )
+        if resp.status_code == 200:
+            return resp.json()["choices"][0]["message"]["content"].strip()
+    raise RuntimeError((last_err or "Groq request failed") + f" | models available to this key: {', '.join(ids[:12]) or 'none listed'}")
 
 
 def _quote_snapshot(ticker):
